@@ -2,6 +2,7 @@ using Dalamud.Plugin.Services;
 using Discord;
 using Discord.WebSocket;
 using FFXIVDiscordBridgePlugin.Core;
+using FFXIVDiscordBridgePlugin.Util;
 
 namespace FFXIVDiscordBridgePlugin.Discord.Interactions;
 
@@ -13,8 +14,8 @@ namespace FFXIVDiscordBridgePlugin.Discord.Interactions;
 ///   1. User clicks Reply → bot shows a modal with a text field
 ///   2. User submits modal → handler sends /tell &lt;character&gt; &lt;message&gt; via ICommandManager
 /// </summary>
-public sealed class TellReplyActionHandler(PermissionGuard guard, ICommandManager commandManager,
-                                           IFramework framework)
+public sealed class TellReplyActionHandler(ILocalizer localizer, PermissionGuard guard,
+                                           ICommandManager commandManager, IFramework framework)
     : IDiscordActionHandler
 {
     private const string ButtonPrefix = "bridge:tell:reply:";
@@ -27,7 +28,7 @@ public sealed class TellReplyActionHandler(PermissionGuard guard, ICommandManage
     {
         if (!guard.CanSendTell(interaction.User))
         {
-            await interaction.RespondAsync("You don't have permission to send tells.", ephemeral: true);
+            await interaction.RespondAsync(localizer.T("tell.no_permission", interaction.UserLocale), ephemeral: true);
             return;
         }
 
@@ -42,24 +43,26 @@ public sealed class TellReplyActionHandler(PermissionGuard guard, ICommandManage
                 break;
 
             default:
-                await interaction.RespondAsync("Unrecognised interaction.", ephemeral: true);
+                await interaction.RespondAsync(localizer.T("tell.unrecognised", interaction.UserLocale), ephemeral: true);
                 break;
         }
     }
 
     // ── Button → open modal ────────────────────────────────────────────────
 
-    private static async Task HandleButtonAsync(SocketMessageComponent button)
+    private async Task HandleButtonAsync(SocketMessageComponent button)
     {
         var encoded   = button.Data.CustomId[ButtonPrefix.Length..];
         var character = Uri.UnescapeDataString(encoded);
+        var locale    = button.UserLocale;
         var modalId   = $"{ModalPrefix}{encoded}";
 
         var modal = new ModalBuilder()
-            .WithTitle($"Reply to {character}")
+            .WithTitle(string.Format(localizer.T("tell.reply_title", locale), character))
             .WithCustomId(modalId)
-            .AddTextInput("Message", "message", TextInputStyle.Paragraph,
-                          placeholder: "Type your reply…", required: true, maxLength: 500)
+            .AddTextInput(localizer.T("tell.message_label", locale), "message", TextInputStyle.Paragraph,
+                          placeholder: localizer.T("tell.message_placeholder", locale),
+                          required: true, maxLength: 500)
             .Build();
 
         await button.RespondWithModalAsync(modal);
@@ -76,7 +79,7 @@ public sealed class TellReplyActionHandler(PermissionGuard guard, ICommandManage
 
         if (string.IsNullOrWhiteSpace(message))
         {
-            await modal.RespondAsync("Message cannot be empty.", ephemeral: true);
+            await modal.RespondAsync(localizer.T("tell.empty_message", modal.UserLocale), ephemeral: true);
             return;
         }
 
@@ -85,6 +88,8 @@ public sealed class TellReplyActionHandler(PermissionGuard guard, ICommandManage
             commandManager.ProcessCommand($"/tell {character} {message}");
         });
 
-        await modal.RespondAsync($"✅ Tell sent to **{character}**.", ephemeral: true);
+        await modal.RespondAsync(
+            string.Format(localizer.T("tell.sent", modal.UserLocale), character),
+            ephemeral: true);
     }
 }

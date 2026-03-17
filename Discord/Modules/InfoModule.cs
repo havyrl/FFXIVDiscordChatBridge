@@ -4,27 +4,28 @@ using Discord.Interactions;
 using FFXIVDiscordBridgePlugin.Config;
 using FFXIVDiscordBridgePlugin.Core;
 using FFXIVDiscordBridgePlugin.Discord;
+using FFXIVDiscordBridgePlugin.Util;
 
 namespace FFXIVDiscordBridgePlugin.Discord.Modules;
 
 /// <summary>General bridge info commands: /help, /status, /who, /requestadmin</summary>
 [DefaultMemberPermissions(GuildPermission.SendMessages)]
-public sealed class InfoModule(PermissionGuard guard, IClientState clientState, BotService botService,
-                               AdminRequestService adminRequest, IConfigStore configStore)
-    : InteractionModuleBase<SocketInteractionContext>
+public sealed class InfoModule(ILocalizer localizer, PermissionGuard guard, IClientState clientState,
+                               BotService botService, AdminRequestService adminRequest, IConfigStore configStore)
+    : LocalizedModuleBase(localizer)
 {
     [SlashCommand("requestadmin", "Request admin access for the FFXIV Discord Bridge.")]
     public async Task RequestAdminAsync()
     {
         if (configStore.Load().AdminDiscordUserId != 0)
         {
-            await RespondAsync("Bridge admin is already configured. Remove them in the plugin settings first.", ephemeral: true);
+            await RespondAsync(T("info.requestadmin.already_configured"), ephemeral: true);
             return;
         }
 
         var name = Context.User.GlobalName ?? Context.User.Username;
         adminRequest.Submit(Context.User.Id, name);
-        await RespondAsync("Request sent! Please approve it in FFXIV.", ephemeral: true);
+        await RespondAsync(T("info.requestadmin.sent"), ephemeral: true);
     }
 
     [SlashCommand("help", "Lists all available bridge commands.")]
@@ -32,32 +33,24 @@ public sealed class InfoModule(PermissionGuard guard, IClientState clientState, 
     {
         if (!guard.CanViewStatus(Context.User))
         {
-            await RespondAsync("You don't have permission to use this command.", ephemeral: true);
+            await RespondAsync(T("common.no_permission"), ephemeral: true);
             return;
         }
 
         var embed = new EmbedBuilder()
-            .WithTitle("FFXIV Bridge — Commands")
+            .WithTitle(T("info.help.title"))
             .WithColor(0x478CFF)
-            .AddField("/help",   "Show this help.")
-            .AddField("/status", "Show bridge connection status and active channel mappings.")
-            .AddField("/who",    "Show which FFXIV character is currently logged in.")
-            .AddField("/say, /fc, /party, /yell, /shout",
-                      "Send a message to the respective FFXIV chat channel.")
-            .AddField("/tell <character> <message>",
-                      "Send a tell to an FFXIV player. Character name supports autocomplete.")
-            .AddField("/config channel",
-                      "Add, remove or list FFXIV→Discord channel mappings.")
-            .AddField("/config backchannel",
-                      "Set or clear the Discord→FFXIV back-channel for a mapping.")
-            .AddField("/config webhook",
-                      "Set the webhook URL for a channel mapping.")
-            .AddField("/config dm",
-                      "Enable or disable DM as an inbound channel.")
-            .AddField("/config permissions",
-                      "Add, remove or list whitelist entries.")
-            .AddField("/config link",
-                      "Link or unlink an FFXIV character to a Discord user.")
+            .AddField("/help",   T("info.help.help"))
+            .AddField("/status", T("info.help.status"))
+            .AddField("/who",    T("info.help.who"))
+            .AddField("/say, /fc, /party, /yell, /shout", T("info.help.chat"))
+            .AddField("/tell <character> <message>",      T("info.help.tell"))
+            .AddField("/config channel",      T("info.help.config_channel"))
+            .AddField("/config backchannel",  T("info.help.config_backchannel"))
+            .AddField("/config webhook",      T("info.help.config_webhook"))
+            .AddField("/config dm",           T("info.help.config_dm"))
+            .AddField("/config permissions",  T("info.help.config_permissions"))
+            .AddField("/config link",         T("info.help.config_link"))
             .Build();
 
         await RespondAsync(embed: embed, ephemeral: true);
@@ -68,7 +61,7 @@ public sealed class InfoModule(PermissionGuard guard, IClientState clientState, 
     {
         if (!guard.CanViewStatus(Context.User))
         {
-            await RespondAsync("You don't have permission to use this command.", ephemeral: true);
+            await RespondAsync(T("common.no_permission"), ephemeral: true);
             return;
         }
 
@@ -76,14 +69,14 @@ public sealed class InfoModule(PermissionGuard guard, IClientState clientState, 
         var loggedIn  = clientState.IsLoggedIn;
         var character = clientState.LocalPlayer is { } p
             ? $"{p.Name}@{p.HomeWorld.ValueNullable?.Name ?? "?"}"
-            : "None";
+            : T("info.status.no_character");
 
         var embed = new EmbedBuilder()
-            .WithTitle("FFXIV Bridge — Status")
+            .WithTitle(T("info.status.title"))
             .WithColor(new Color(connected ? 0x478CFFu : 0xD10303u))
-            .AddField("Bot",       connected ? "✅ Connected" : "❌ Disconnected", inline: true)
-            .AddField("FFXIV",     loggedIn  ? "✅ Logged in" : "⚠️ Not logged in", inline: true)
-            .AddField("Character", character, inline: true)
+            .AddField(T("info.status.bot_label"),       connected ? T("info.status.connected")    : T("info.status.disconnected"), inline: true)
+            .AddField(T("info.status.ffxiv_label"),     loggedIn  ? T("info.status.logged_in")    : T("info.status.not_logged_in"), inline: true)
+            .AddField(T("info.status.character_label"), character, inline: true)
             .Build();
 
         await RespondAsync(embed: embed, ephemeral: true);
@@ -94,18 +87,18 @@ public sealed class InfoModule(PermissionGuard guard, IClientState clientState, 
     {
         if (!guard.CanViewStatus(Context.User))
         {
-            await RespondAsync("You don't have permission to use this command.", ephemeral: true);
+            await RespondAsync(T("common.no_permission"), ephemeral: true);
             return;
         }
 
         if (clientState.LocalPlayer is not { } player)
         {
-            await RespondAsync("No character is currently logged in.", ephemeral: true);
+            await RespondAsync(T("info.who.not_logged_in"), ephemeral: true);
             return;
         }
 
         var name  = player.Name.ToString();
         var world = player.HomeWorld.ValueNullable?.Name.ToString() ?? "?";
-        await RespondAsync($"Currently playing as **{name}@{world}**.", ephemeral: true);
+        await RespondAsync(T("info.who.playing_as", name, world), ephemeral: true);
     }
 }

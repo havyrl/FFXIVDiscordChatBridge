@@ -3,6 +3,7 @@ using Discord;
 using Discord.Interactions;
 using FFXIVDiscordBridgePlugin.Config;
 using FFXIVDiscordBridgePlugin.Core;
+using FFXIVDiscordBridgePlugin.Util;
 
 namespace FFXIVDiscordBridgePlugin.Discord.Modules;
 
@@ -11,9 +12,9 @@ namespace FFXIVDiscordBridgePlugin.Discord.Modules;
 /// All commands require the user to be on the whitelist (CanUseChatCommands),
 /// except /tell which requires CanSendTell.
 /// </summary>
-public sealed class ChatModule(PermissionGuard guard, ICommandManager commandManager,
+public sealed class ChatModule(ILocalizer localizer, PermissionGuard guard, ICommandManager commandManager,
                                IConfigStore configStore, IFramework framework)
-    : InteractionModuleBase<SocketInteractionContext>
+    : LocalizedModuleBase(localizer)
 {
     [SlashCommand("say", "Send a /say message in FFXIV.")]
     public async Task SayAsync([Summary("message", "Message text")] string message)
@@ -44,7 +45,7 @@ public sealed class ChatModule(PermissionGuard guard, ICommandManager commandMan
     {
         if (!guard.CanSendTell(Context.User))
         {
-            await RespondAsync("You don't have permission to send tells.", ephemeral: true);
+            await RespondAsync(T("chat.no_permission_tell"), ephemeral: true);
             return;
         }
         await SendChatAsync($"/tell {character} {message}", requireChat: false);
@@ -56,7 +57,7 @@ public sealed class ChatModule(PermissionGuard guard, ICommandManager commandMan
     {
         if (requireChat && !guard.CanUseChatCommands(Context.User))
         {
-            await RespondAsync("You don't have permission to use chat commands.", ephemeral: true);
+            await RespondAsync(T("chat.no_permission_chat"), ephemeral: true);
             return;
         }
 
@@ -66,7 +67,7 @@ public sealed class ChatModule(PermissionGuard guard, ICommandManager commandMan
             commandManager.ProcessCommand(command);
         });
 
-        await RespondAsync("✅ Sent.", ephemeral: true);
+        await RespondAsync(T("chat.sent"), ephemeral: true);
     }
 }
 

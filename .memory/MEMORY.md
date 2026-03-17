@@ -81,6 +81,7 @@ BinaryFromLogGenerator/   ← Hilfstool: generiert Test-Binärdaten aus FFXIV-Lo
 | [sessions.md](sessions.md) | Verlauf wichtiger Session-Erkenntnisse |
 | [project_pending_features.md](project_pending_features.md) | Features aus Dalamud.DiscordBridge (Referenz) die noch portiert werden sollen |
 | [feedback_memory_location.md](feedback_memory_location.md) | Memories nur in `.memory/` speichern, nicht extern |
+| [feedback_localization.md](feedback_localization.md) | Jede neue user-facing Zeichenkette muss in alle Locale-Dateien (en, de) eingetragen werden |
 
 ---
 

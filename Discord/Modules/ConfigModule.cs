@@ -14,25 +14,25 @@ namespace FFXIVDiscordBridgePlugin.Discord.Modules;
 /// </summary>
 [Group("config", "Bridge configuration (admin only).")]
 [DefaultMemberPermissions(GuildPermission.Administrator)]
-public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore)
-    : InteractionModuleBase<SocketInteractionContext>
+public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IConfigStore configStore)
+    : LocalizedModuleBase(localizer)
 {
     // ── /config channel ────────────────────────────────────────────────────
 
     [Group("channel", "Manage FFXIV→Discord channel mappings.")]
-    public sealed class ChannelGroup(PermissionGuard guard, IConfigStore configStore)
-        : InteractionModuleBase<SocketInteractionContext>
+    public sealed class ChannelGroup(ILocalizer localizer, PermissionGuard guard, IConfigStore configStore)
+        : LocalizedModuleBase(localizer)
     {
         [SlashCommand("add", "Forward a FFXIV chat type to a Discord channel.")]
         public async Task AddAsync(
             [Summary("channel", "Discord channel")] ITextChannel channel,
             [Summary("type", "FFXIV chat type slug (e.g. fc, say, tell)")] string type)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
             if (!TryParseType(type, out var chatType))
             {
-                await RespondAsync($"Unknown chat type `{type}`. Use the slug (e.g. `fc`, `say`, `tell`).", ephemeral: true);
+                await RespondAsync(T("common.unknown_chat_type", type), ephemeral: true);
                 return;
             }
 
@@ -41,7 +41,7 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
 
             if (mapping.InboundChatTypes.Contains(chatType))
             {
-                await RespondAsync($"`{type}` is already mapped to <#{channel.Id}>.", ephemeral: true);
+                await RespondAsync(T("config.channel.already_mapped", type, channel.Id), ephemeral: true);
                 return;
             }
 
@@ -49,7 +49,7 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
             if (string.IsNullOrEmpty(mapping.Label)) mapping.Label = channel.Name;
             configStore.Save(config);
 
-            await RespondAsync($"✅ `{ChatTypeHelper.GetFancyName(chatType)}` → <#{channel.Id}> added.", ephemeral: true);
+            await RespondAsync(T("config.channel.added", ChatTypeHelper.GetFancyName(chatType), channel.Id), ephemeral: true);
         }
 
         [SlashCommand("remove", "Stop forwarding a FFXIV chat type to a Discord channel.")]
@@ -57,11 +57,11 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
             [Summary("channel", "Discord channel")] ITextChannel channel,
             [Summary("type", "FFXIV chat type slug")] string type)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
             if (!TryParseType(type, out var chatType))
             {
-                await RespondAsync($"Unknown chat type `{type}`.", ephemeral: true);
+                await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true);
                 return;
             }
 
@@ -70,36 +70,36 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
 
             if (mapping is null || !mapping.InboundChatTypes.Remove(chatType))
             {
-                await RespondAsync($"`{type}` was not mapped to <#{channel.Id}>.", ephemeral: true);
+                await RespondAsync(T("config.channel.not_mapped", type, channel.Id), ephemeral: true);
                 return;
             }
 
             configStore.Save(config);
-            await RespondAsync($"✅ `{ChatTypeHelper.GetFancyName(chatType)}` removed from <#{channel.Id}>.", ephemeral: true);
+            await RespondAsync(T("config.channel.removed", ChatTypeHelper.GetFancyName(chatType), channel.Id), ephemeral: true);
         }
 
         [SlashCommand("list", "List all current channel mappings.")]
         public async Task ListAsync()
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
             var config = configStore.Load();
             if (config.ChannelMappings.Count == 0)
             {
-                await RespondAsync("No channel mappings configured yet.", ephemeral: true);
+                await RespondAsync(T("config.channel.no_mappings"), ephemeral: true);
                 return;
             }
 
             var lines = config.ChannelMappings.Select(m =>
             {
-                var target  = m.IsDm ? "DM" : $"<#{m.DiscordChannelId}>";
-                var types   = string.Join(", ", m.InboundChatTypes.Select(ChatTypeHelper.GetSlug));
-                var back    = m.BackChannelType.HasValue ? $" | back→{ChatTypeHelper.GetSlug(m.BackChannelType.Value)}" : "";
+                var target = m.IsDm ? "DM" : $"<#{m.DiscordChannelId}>";
+                var types  = string.Join(", ", m.InboundChatTypes.Select(ChatTypeHelper.GetSlug));
+                var back   = m.BackChannelType.HasValue ? $" | back→{ChatTypeHelper.GetSlug(m.BackChannelType.Value)}" : "";
                 return $"{target}: `{types}`{back}";
             });
 
             var embed = new EmbedBuilder()
-                .WithTitle("Channel Mappings")
+                .WithTitle(T("config.channel.list_title"))
                 .WithColor(0x478CFF)
                 .WithDescription(string.Join("\n", lines))
                 .Build();
@@ -115,14 +115,14 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
         [Summary("channel", "Discord channel")] ITextChannel channel,
         [Summary("type", "FFXIV chat type slug, or 'none' to disable")] string type)
     {
-        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
         var config  = configStore.Load();
         var mapping = config.ChannelMappings.FirstOrDefault(m => m.DiscordChannelId == channel.Id);
 
         if (mapping is null)
         {
-            await RespondAsync($"No mapping found for <#{channel.Id}>. Add a channel type first.", ephemeral: true);
+            await RespondAsync(T("config.backchannel.no_mapping", channel.Id), ephemeral: true);
             return;
         }
 
@@ -130,19 +130,19 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
         {
             mapping.BackChannelType = null;
             configStore.Save(config);
-            await RespondAsync($"✅ Back-channel for <#{channel.Id}> disabled.", ephemeral: true);
+            await RespondAsync(T("config.backchannel.disabled", channel.Id), ephemeral: true);
             return;
         }
 
         if (!TryParseType(type, out var chatType))
         {
-            await RespondAsync($"Unknown chat type `{type}`.", ephemeral: true);
+            await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true);
             return;
         }
 
         mapping.BackChannelType = chatType;
         configStore.Save(config);
-        await RespondAsync($"✅ Back-channel for <#{channel.Id}> set to `{ChatTypeHelper.GetFancyName(chatType)}`.", ephemeral: true);
+        await RespondAsync(T("config.backchannel.set", channel.Id, ChatTypeHelper.GetFancyName(chatType)), ephemeral: true);
     }
 
     // ── /config webhook ────────────────────────────────────────────────────
@@ -152,7 +152,7 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
         [Summary("channel", "Discord channel")] ITextChannel channel,
         [Summary("url", "Webhook URL")] string url)
     {
-        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
         var config  = configStore.Load();
         var mapping = GetOrCreateMapping(config, channel.Id);
@@ -160,23 +160,23 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
         if (string.IsNullOrEmpty(mapping.Label)) mapping.Label = channel.Name;
         configStore.Save(config);
 
-        await RespondAsync($"✅ Webhook URL set for <#{channel.Id}>.", ephemeral: true);
+        await RespondAsync(T("config.webhook.set", channel.Id), ephemeral: true);
     }
 
     // ── /config dm ────────────────────────────────────────────────────────
 
     [Group("dm", "Configure FFXIV chat types forwarded to your DM.")]
-    public sealed class DmGroup(PermissionGuard guard, IConfigStore configStore)
-        : InteractionModuleBase<SocketInteractionContext>
+    public sealed class DmGroup(ILocalizer localizer, PermissionGuard guard, IConfigStore configStore)
+        : LocalizedModuleBase(localizer)
     {
         [SlashCommand("add", "Forward a FFXIV chat type to the admin's DM.")]
         public async Task AddAsync([Summary("type", "FFXIV chat type slug")] string type)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
             if (!TryParseType(type, out var chatType))
             {
-                await RespondAsync($"Unknown chat type `{type}`.", ephemeral: true);
+                await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true);
                 return;
             }
 
@@ -191,17 +191,17 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
                 mapping.InboundChatTypes.Add(chatType);
 
             configStore.Save(config);
-            await RespondAsync($"✅ `{ChatTypeHelper.GetFancyName(chatType)}` will be forwarded to your DM.", ephemeral: true);
+            await RespondAsync(T("config.dm.added", ChatTypeHelper.GetFancyName(chatType)), ephemeral: true);
         }
 
         [SlashCommand("remove", "Stop forwarding a FFXIV chat type to the admin's DM.")]
         public async Task RemoveAsync([Summary("type", "FFXIV chat type slug")] string type)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
             if (!TryParseType(type, out var chatType))
             {
-                await RespondAsync($"Unknown chat type `{type}`.", ephemeral: true);
+                await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true);
                 return;
             }
 
@@ -210,15 +210,15 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
             mapping?.InboundChatTypes.Remove(chatType);
             configStore.Save(config);
 
-            await RespondAsync($"✅ `{ChatTypeHelper.GetFancyName(chatType)}` removed from DM.", ephemeral: true);
+            await RespondAsync(T("config.dm.removed", ChatTypeHelper.GetFancyName(chatType)), ephemeral: true);
         }
     }
 
     // ── /config permissions ────────────────────────────────────────────────
 
     [Group("permissions", "Manage the user/role whitelist.")]
-    public sealed class PermissionsGroup(PermissionGuard guard, IConfigStore configStore)
-        : InteractionModuleBase<SocketInteractionContext>
+    public sealed class PermissionsGroup(ILocalizer localizer, PermissionGuard guard, IConfigStore configStore)
+        : LocalizedModuleBase(localizer)
     {
         [SlashCommand("add-user", "Add a Discord user to the whitelist.")]
         public async Task AddUserAsync(
@@ -228,7 +228,7 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
             [Summary("chat", "Can use /say, /fc, etc.")] bool chat = false,
             [Summary("status", "Can view bridge status")] bool status = true)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
             var config = configStore.Load();
             config.Whitelist.RemoveAll(e => !e.IsRole && e.DiscordId == user.Id);
@@ -245,7 +245,7 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
                 },
             });
             configStore.Save(config);
-            await RespondAsync($"✅ <@{user.Id}> added to whitelist.", ephemeral: true);
+            await RespondAsync(T("config.permissions.user_added", user.Id), ephemeral: true);
         }
 
         [SlashCommand("add-role", "Add a Discord role to the whitelist.")]
@@ -256,7 +256,7 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
             [Summary("chat", "Can use /say, /fc, etc.")] bool chat = false,
             [Summary("status", "Can view bridge status")] bool status = true)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
             var config = configStore.Load();
             config.Whitelist.RemoveAll(e => e.IsRole && e.DiscordId == role.Id);
@@ -273,17 +273,17 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
                 },
             });
             configStore.Save(config);
-            await RespondAsync($"✅ Role <@&{role.Id}> added to whitelist.", ephemeral: true);
+            await RespondAsync(T("config.permissions.role_added", role.Id), ephemeral: true);
         }
 
         [SlashCommand("remove", "Remove a user or role from the whitelist.")]
         public async Task RemoveAsync([Summary("id", "Discord user or role ID")] string id)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
             if (!ulong.TryParse(id, out var discordId))
             {
-                await RespondAsync("Invalid ID.", ephemeral: true);
+                await RespondAsync(T("config.permissions.invalid_id"), ephemeral: true);
                 return;
             }
 
@@ -291,18 +291,20 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
             var removed = config.Whitelist.RemoveAll(e => e.DiscordId == discordId);
             configStore.Save(config);
 
-            await RespondAsync(removed > 0 ? $"✅ Removed {discordId} from whitelist." : "Entry not found.", ephemeral: true);
+            await RespondAsync(
+                removed > 0 ? T("config.permissions.removed", discordId) : T("config.permissions.not_found"),
+                ephemeral: true);
         }
 
         [SlashCommand("list", "Show all whitelist entries.")]
         public async Task ListAsync()
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
             var config = configStore.Load();
             if (config.Whitelist.Count == 0)
             {
-                await RespondAsync("Whitelist is empty.", ephemeral: true);
+                await RespondAsync(T("config.permissions.empty"), ephemeral: true);
                 return;
             }
 
@@ -318,7 +320,7 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
             });
 
             var embed = new EmbedBuilder()
-                .WithTitle("Whitelist")
+                .WithTitle(T("config.permissions.list_title"))
                 .WithColor(0x478CFF)
                 .WithDescription(string.Join("\n", lines))
                 .Build();
@@ -334,26 +336,28 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
         [Summary("user", "Discord user")] IUser user,
         [Summary("character", "FFXIV character name, e.g. Firstname Lastname@World")] string character)
     {
-        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
         var config = configStore.Load();
         config.CharLinks.RemoveAll(l => l.DiscordUserId == user.Id);
         config.CharLinks.Add(new CharLink { DiscordUserId = user.Id, FfxivCharacter = character });
         configStore.Save(config);
 
-        await RespondAsync($"✅ **{character}** linked to <@{user.Id}>.", ephemeral: true);
+        await RespondAsync(T("config.link.linked", character, user.Id), ephemeral: true);
     }
 
     [SlashCommand("unlink", "Remove the FFXIV↔Discord character link for a user.")]
     public async Task UnlinkAsync([Summary("user", "Discord user")] IUser user)
     {
-        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync("Only the bridge admin can use config commands.", ephemeral: true); return; }
+        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
 
         var config  = configStore.Load();
         var removed = config.CharLinks.RemoveAll(l => l.DiscordUserId == user.Id);
         configStore.Save(config);
 
-        await RespondAsync(removed > 0 ? $"✅ Link removed for <@{user.Id}>." : "No link found.", ephemeral: true);
+        await RespondAsync(
+            removed > 0 ? T("config.unlink.removed", user.Id) : T("config.unlink.not_found"),
+            ephemeral: true);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
@@ -382,5 +386,4 @@ public sealed class ConfigModule(PermissionGuard guard, IConfigStore configStore
         result = default;
         return false;
     }
-
 }

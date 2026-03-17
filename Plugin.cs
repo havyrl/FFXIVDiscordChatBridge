@@ -38,6 +38,7 @@ public sealed class Plugin : IDalamudPlugin
         collection.AddSingleton<IConfigStore, DalamudConfigStore>();
 
         // ── Utility services ──────────────────────────────────────────────
+        collection.AddSingleton<ILocalizer, Localizer>();
         collection.AddSingleton<SpecialCharsHandler>();
         collection.AddSingleton<CharacterAvatarService>();
 
