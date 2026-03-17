@@ -22,6 +22,10 @@ public sealed class BotService : IDisposable
     private readonly IEnumerable<IDiscordActionHandler> _actionHandlers;
     private readonly IClientState _clientState;
     private readonly SpecialCharsHandler _specialChars;
+    private readonly WebhookResolver _webhookResolver;
+    private readonly PermissionGuard _permissionGuard;
+    private readonly GameChatSender _chatSender;
+    private readonly IFramework _framework;
 
     private DiscordSocketClient? _client;
     private InteractionService? _interactions;
@@ -30,9 +34,16 @@ public sealed class BotService : IDisposable
     public bool IsConnected => _client?.ConnectionState == ConnectionState.Connected;
     public DiscordSocketClient? Client => _client;
 
+    /// <summary>All guilds (servers) the bot is currently a member of. Empty when disconnected.</summary>
+    public IReadOnlyList<(ulong Id, string Name)> AvailableGuilds
+        => _client?.Guilds.Select(g => (g.Id, g.Name)).ToList()
+           ?? (IReadOnlyList<(ulong, string)>)[];
+
     public BotService(IPluginLog log, IConfigStore configStore,
                       IServiceProvider services, IEnumerable<IDiscordActionHandler> actionHandlers,
-                      IClientState clientState, SpecialCharsHandler specialChars)
+                      IClientState clientState, SpecialCharsHandler specialChars,
+                      WebhookResolver webhookResolver, PermissionGuard permissionGuard,
+                      GameChatSender chatSender, IFramework framework)
     {
         _log = log;
         _configStore = configStore;
@@ -40,6 +51,10 @@ public sealed class BotService : IDisposable
         _actionHandlers = actionHandlers;
         _clientState = clientState;
         _specialChars = specialChars;
+        _webhookResolver = webhookResolver;
+        _permissionGuard = permissionGuard;
+        _chatSender = chatSender;
+        _framework = framework;
 
         clientState.Login  += OnPlayerLogin;
         clientState.Logout += OnPlayerLogout;
@@ -80,7 +95,8 @@ public sealed class BotService : IDisposable
 
         _interactions = new InteractionService(_client, new InteractionServiceConfig
         {
-            DefaultRunMode = RunMode.Async,
+            DefaultRunMode    = RunMode.Async,
+            LocalizationManager = new SlashCommandLocalizationManager(_services.GetRequiredService<ILocalizer>()),
         });
 
         _client.Log += OnLog;
@@ -88,6 +104,7 @@ public sealed class BotService : IDisposable
         _client.InteractionCreated += OnInteraction;
         _client.ButtonExecuted += OnButtonExecuted;
         _client.ModalSubmitted += OnModalSubmitted;
+        _client.MessageReceived += OnMessageReceived;
         _interactions.SlashCommandExecuted += OnSlashCommandExecuted;
 
         await _client.LoginAsync(TokenType.Bot, config.BotToken);
@@ -112,16 +129,29 @@ public sealed class BotService : IDisposable
 
         // Register all InteractionModules (slash commands) found via reflection
         await _interactions!.AddModulesAsync(typeof(Plugin).Assembly, _services);
-        await _interactions.RegisterCommandsGloballyAsync();
 
-        _log.Information("[BotService] Slash commands registered ({Count} modules).",
-                         _interactions.Modules.Count);
+        var primaryGuildId = _configStore.Load().PrimaryGuildId;
+        if (primaryGuildId != 0)
+        {
+            await _interactions.RegisterCommandsToGuildAsync(primaryGuildId);
+            _log.Information("[BotService] Slash commands registered to guild {GuildId} ({Count} modules).",
+                             primaryGuildId, _interactions.Modules.Count);
+        }
+        else
+        {
+            await _interactions.RegisterCommandsGloballyAsync();
+            _log.Information("[BotService] Slash commands registered globally ({Count} modules).",
+                             _interactions.Modules.Count);
+        }
 
         // Set initial bot presence based on whether the player is already logged in
         await _client.SetStatusAsync(_clientState.IsLoggedIn ? UserStatus.Online : UserStatus.Idle);
 
         // Resolve any custom guild emotes for FFXIV special characters
         _specialChars.RefreshEmotes(_client);
+
+        // Auto-create/resolve webhooks for all channel mappings that have none yet
+        await _webhookResolver.ResolveAllAsync(_client);
     }
 
     private async Task OnInteraction(SocketInteraction interaction)
@@ -150,6 +180,34 @@ public sealed class BotService : IDisposable
             return;
         }
         await handler.HandleAsync(modal);
+    }
+
+    private async Task OnMessageReceived(SocketMessage message)
+    {
+        // Ignore bots, webhooks, and system messages — only process real user messages
+        if (message.Source != MessageSource.User) return;
+
+        var config  = _configStore.Load();
+        var mapping = config.ChannelMappings.FirstOrDefault(
+            m => !m.IsDm && m.DiscordChannelId == message.Channel.Id && m.BackChannelType.HasValue);
+        if (mapping is null) return;
+
+        if (!_permissionGuard.CanUseChatCommands(message.Author)) return;
+
+        var gameCmd = ChatTypeHelper.GetGameCommand(mapping.BackChannelType!.Value);
+        if (gameCmd is null) return;
+
+        var text = message.Content;
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        try
+        {
+            await _framework.RunOnFrameworkThread(() => _chatSender.Execute($"{gameCmd} {text}"));
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[BotService] Failed to forward back-channel message to FFXIV");
+        }
     }
 
     private Task OnSlashCommandExecuted(SlashCommandInfo info, IInteractionContext ctx, IResult result)

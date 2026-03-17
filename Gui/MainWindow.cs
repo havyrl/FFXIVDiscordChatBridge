@@ -1,5 +1,7 @@
 using System.Numerics;
 using Dalamud.Game.Text;
+using Dalamud.Interface;
+using Dalamud.Interface.Components;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 using FFXIVDiscordBridgePlugin.Config;
@@ -13,7 +15,7 @@ namespace FFXIVDiscordBridgePlugin.Gui;
 /// Main plugin window opened via /discordbridge or the Dalamud plugin menu.
 /// Tabs: Bot Settings | Channels | Whitelist | Character Links
 /// </summary>
-public sealed class MainWindow(IConfigStore configStore, BotService botService)
+public sealed class MainWindow(IConfigStore configStore, BotService botService, ILocalizer localizer)
     : Window("FFXIV Discord Bridge", ImGuiWindowFlags.None)
 {
     private PluginConfig _config = null!;
@@ -22,6 +24,7 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService)
     private string _botToken        = string.Empty;
     private string _adminUserId     = string.Empty;
     private bool   _tokenDirty;
+    private int    _primaryGuildIdx = 0;   // 0 = global, 1+ = guild index in AvailableGuilds
 
     // Channel tab
     private string _newChannelId    = string.Empty;
@@ -45,6 +48,16 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService)
         _adminUserId = _config.AdminDiscordUserId == 0 ? string.Empty
                        : _config.AdminDiscordUserId.ToString();
         _tokenDirty  = false;
+
+        _primaryGuildIdx = 0;
+        if (_config.PrimaryGuildId != 0)
+        {
+            var guilds = botService.AvailableGuilds;
+            for (var i = 0; i < guilds.Count; i++)
+            {
+                if (guilds[i].Id == _config.PrimaryGuildId) { _primaryGuildIdx = i + 1; break; }
+            }
+        }
     }
 
     public override void Draw()
@@ -82,11 +95,25 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService)
         ImGui.InputText("##adminid", ref _adminUserId, 24);
 
         ImGui.Spacing();
+        ImGui.Text("Default Discord Server");
+        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+        var guilds  = botService.AvailableGuilds;
+        var options = new string[guilds.Count + 1];
+        options[0]  = "Global (all servers)";
+        for (var i = 0; i < guilds.Count; i++)
+            options[i + 1] = guilds[i].Name;
+        if (!botService.IsConnected)
+            ImGui.TextDisabled("(connect the bot first to see available servers)");
+        else
+            ImGui.Combo("##primaryguild", ref _primaryGuildIdx, options, options.Length);
+
+        ImGui.Spacing();
         if (ImGui.Button("Save & Restart Bot"))
         {
             _config.BotToken = _botToken;
             if (ulong.TryParse(_adminUserId, out var uid))
                 _config.AdminDiscordUserId = uid;
+            _config.PrimaryGuildId = _primaryGuildIdx == 0 ? 0 : guilds[_primaryGuildIdx - 1].Id;
             configStore.Save(_config);
             _tokenDirty = false;
 
@@ -115,6 +142,7 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService)
             ImGui.TextDisabled("No mappings configured yet.");
 
         ChannelMapping? toRemove = null;
+        var shiftHeld = ImGui.GetIO().KeyShift;
         foreach (var mapping in _config.ChannelMappings)
         {
             var label  = mapping.IsDm ? "DM" : (string.IsNullOrEmpty(mapping.Label)
@@ -125,8 +153,14 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService)
 
             ImGui.BulletText($"{label}  [{types}]{back}");
             ImGui.SameLine();
-            if (ImGui.SmallButton($"Remove##rm{mapping.DiscordChannelId}"))
+            if (!shiftHeld) ImGui.BeginDisabled();
+            ImGui.PushID($"rm{mapping.DiscordChannelId}");
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.TrashAlt))
                 toRemove = mapping;
+            ImGui.PopID();
+            if (!shiftHeld) ImGui.EndDisabled();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled) && !shiftHeld)
+                ImGui.SetTooltip(localizer.T("gui.main.delete_hold_shift"));
         }
 
         if (toRemove is not null)
@@ -185,14 +219,21 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService)
         ImGui.Separator();
 
         WhitelistEntry? toRemove = null;
+        var shiftHeld = ImGui.GetIO().KeyShift;
         foreach (var entry in _config.Whitelist)
         {
             var kind  = entry.IsRole ? "Role" : "User";
             var perms = BuildPermString(entry.Permissions);
             ImGui.BulletText($"[{kind}] {entry.DiscordId}  ({perms})");
             ImGui.SameLine();
-            if (ImGui.SmallButton($"Remove##wlrm{entry.DiscordId}"))
+            if (!shiftHeld) ImGui.BeginDisabled();
+            ImGui.PushID($"wlrm{entry.DiscordId}");
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.TrashAlt))
                 toRemove = entry;
+            ImGui.PopID();
+            if (!shiftHeld) ImGui.EndDisabled();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled) && !shiftHeld)
+                ImGui.SetTooltip(localizer.T("gui.main.delete_hold_shift"));
         }
         if (toRemove is not null)
         {
@@ -243,12 +284,19 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService)
         ImGui.Separator();
 
         CharLink? toRemove = null;
+        var shiftHeld = ImGui.GetIO().KeyShift;
         foreach (var link in _config.CharLinks)
         {
             ImGui.BulletText($"{link.FfxivCharacter}  ↔  {link.DiscordUserId}");
             ImGui.SameLine();
-            if (ImGui.SmallButton($"Remove##clrm{link.DiscordUserId}"))
+            if (!shiftHeld) ImGui.BeginDisabled();
+            ImGui.PushID($"clrm{link.DiscordUserId}");
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.TrashAlt))
                 toRemove = link;
+            ImGui.PopID();
+            if (!shiftHeld) ImGui.EndDisabled();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled) && !shiftHeld)
+                ImGui.SetTooltip(localizer.T("gui.main.delete_hold_shift"));
         }
         if (toRemove is not null)
         {
