@@ -23,6 +23,21 @@ public sealed class DiscordMessagePayload
     /// <summary>Optional avatar URL for the webhook post.</summary>
     public string? AvatarUrl { get; init; }
 
+    /// <summary>Optional embeds to include in the message.</summary>
+    public Embed[]? Embeds { get; init; }
+
     /// <summary>Optional message components (buttons) to attach.</summary>
     public MessageComponent? Components { get; init; }
+
+    /// <summary>
+    /// When set, components are automatically removed from the sent message after this duration.
+    /// Useful for time-limited notifications like Duty Finder pops.
+    /// </summary>
+    public TimeSpan? ComponentTimeout { get; init; }
+
+    /// <summary>
+    /// When true, the message is sent as a DM to the admin user instead of via webhook to a guild channel.
+    /// ChannelId and WebhookUrl are ignored for DM payloads.
+    /// </summary>
+    public bool IsDm { get; init; }
 }
