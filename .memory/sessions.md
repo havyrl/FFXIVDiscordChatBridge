@@ -4,6 +4,21 @@ Wichtige Erkenntnisse, Entscheidungen und Änderungen aus einzelnen Arbeitssessi
 
 ---
 
+## 2026-03-17 — Tell-Partner-Cache Fix & Config-Migration
+
+**Aktivität:** Bug behoben: `RecentTellPartners` speicherte Namen ohne `@World`, `PlayerPayload` wurde nicht genutzt.
+
+**Erkenntnisse:**
+- `PluginConfig` wird in `%AppData%\XIVLauncher\pluginConfigs\FFXIVDiscordBridgePlugin.json` persistiert — überlebt jedes Deployment. Bestehende fehlerhafte Daten müssen aktiv migriert werden.
+- **Config-Migrations-Pattern:** Migration in `DalamudConfigStore.Load()` nach Deserialisierung, `SavePluginConfig()` nur wenn tatsächlich etwas geändert wurde.
+- **FFXIV SeString Cross-World:** `sender.TextValue` konkateniert Name und World **ohne Trenner** (z.B. `"R'yloh TiaOdin"`). Für saubere Trennung immer `PlayerPayload.PlayerName` + `PlayerPayload.World` verwenden. Same-Server-Tells haben ggf. keinen `PlayerPayload` → Fallback auf `senderName + "@" + localWorld`.
+
+**Geänderte Dateien:**
+- `Chat/ChatEventSource.cs` — `TrackTellPartner` + `CharLinks`-Lookup nutzen jetzt `Name@World`
+- `Config/DalamudConfigStore.cs` — `Migrate()` entfernt alte Einträge ohne `@`
+
+---
+
 ## 2026-03-17 — Architekturentwurf finalisiert
 
 **Aktivität:** Vollständigen Architekturentwurf ausgearbeitet und in architecture.md gespeichert.

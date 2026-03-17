@@ -85,9 +85,10 @@ BinaryFromLogGenerator/   ← Hilfstool: generiert Test-Binärdaten aus FFXIV-Lo
 | [feedback_primary_constructors.md](feedback_primary_constructors.md) | C# Primary Constructor: Parameter nie gleichzeitig als Property speichern und direkt in Methoden benutzen (CS9107/CS9124) |
 | [project_guild_command_access.md](project_guild_command_access.md) | Slash Commands in Guild-Channels nicht sichtbar (nur per DM) — offen, Ursache unklar |
 | [project_pandorasbox_feature_ideas.md](project_pandorasbox_feature_ideas.md) | Feature-Ideen aus PandorasBox-Analyse: IPC-API, Post-Duty-Summary, Map-Link-Formatting, FATE-Notifications |
+| [project_linkshell_api.md](project_linkshell_api.md) | FFXIVClientStructs LS/CWLS-Namen API (Typen, Methoden, deutsche Präfixe kk/wkk) |
 
 ---
 
 ## Letzte Aktualisierung
 
-2026-03-17 — PandorasBox-Feature-Analyse hinzugefügt.
+2026-03-17 — LS/CWLS-Namen-Feature implementiert, API-Erkenntnisse notiert.
