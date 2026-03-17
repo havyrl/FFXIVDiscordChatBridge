@@ -11,7 +11,8 @@ namespace FFXIVDiscordBridgePlugin.Discord.Modules;
 /// <summary>General bridge info commands: /help, /status, /who, /requestadmin</summary>
 [DefaultMemberPermissions(GuildPermission.SendMessages)]
 public sealed class InfoModule(ILocalizer localizer, PermissionGuard guard, IClientState clientState,
-                               BotService botService, AdminRequestService adminRequest, IConfigStore configStore)
+                               BotService botService, AdminRequestService adminRequest, IConfigStore configStore,
+                               IFramework framework)
     : LocalizedModuleBase(localizer)
 {
     [SlashCommand("requestadmin", "Request admin access for the FFXIV Discord Bridge.")]
@@ -66,10 +67,14 @@ public sealed class InfoModule(ILocalizer localizer, PermissionGuard guard, ICli
         }
 
         var connected = botService.IsConnected;
-        var loggedIn  = clientState.IsLoggedIn;
-        var character = clientState.LocalPlayer is { } p
-            ? $"{p.Name}@{p.HomeWorld.ValueNullable?.Name ?? "?"}"
-            : T("info.status.no_character");
+        var (loggedIn, character) = await framework.RunOnFrameworkThread(() =>
+        {
+            var li = clientState.IsLoggedIn;
+            var ch = clientState.LocalPlayer is { } p
+                ? $"{p.Name}@{p.HomeWorld.ValueNullable?.Name ?? "?"}"
+                : T("info.status.no_character");
+            return (li, ch);
+        });
 
         var embed = new EmbedBuilder()
             .WithTitle(T("info.status.title"))
@@ -91,14 +96,19 @@ public sealed class InfoModule(ILocalizer localizer, PermissionGuard guard, ICli
             return;
         }
 
-        if (clientState.LocalPlayer is not { } player)
+        var playerInfo = await framework.RunOnFrameworkThread(() =>
+        {
+            if (clientState.LocalPlayer is not { } p) return ((string, string)?)null;
+            return (p.Name.ToString(), p.HomeWorld.ValueNullable?.Name.ToString() ?? "?");
+        });
+
+        if (playerInfo is null)
         {
             await RespondAsync(T("info.who.not_logged_in"), ephemeral: true);
             return;
         }
 
-        var name  = player.Name.ToString();
-        var world = player.HomeWorld.ValueNullable?.Name.ToString() ?? "?";
+        var (name, world) = playerInfo.Value;
         await RespondAsync(T("info.who.playing_as", name, world), ephemeral: true);
     }
 }
