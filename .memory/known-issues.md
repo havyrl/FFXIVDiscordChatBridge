@@ -17,10 +17,9 @@
 
 ## Einschränkungen (by Design)
 
-- Nur DirectX 11 – kein DX9, kein Mac-Client
-- FFXIV muss im Vordergrund/Fenstermodus sein für InputSimulator
+- Nur Windows / DirectX 11 — kein DX9, kein Mac-Client
 - Kein Support für mehrere FFXIV-Clients gleichzeitig
-- Discord-Webhook nur für FFXIV→Discord (kein regulärer Bot-Post)
+- Discord-Webhook nur für FFXIV→Discord; Discord→FFXIV läuft über Bot + Slash Commands
 
 ---
 

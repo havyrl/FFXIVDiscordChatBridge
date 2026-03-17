@@ -8,43 +8,34 @@
 
 ## Projekt auf einen Blick
 
-**Was ist das?** Eine Windows-Anwendung (.NET 7, WinExe), die Discord-Kanäle mit dem FFXIV-In-Game-Chat bidirektional verbindet.
+**Was ist das?** Dalamud-Plugin für FFXIV (.NET 10, `net10.0-windows`), das FFXIV-Chat bidirektional mit Discord verbindet. Kein dedizierter Account, kein Fenstermodus — läuft direkt im Spielprozess via Dalamud (API Level 14).
 
-**Version:** 2.4.2 (CHANGELOG.md)
+**Version:** 0.1.0-beta (aktuell in Beta)
 
-**Besitzer/Maintainer:** havyrl (GitHub-Nutzername aus Repo-Pfad)
+**Besitzer/Maintainer:** havyrl
 
 **Kritische Einschränkungen:**
-- Läuft nur auf Windows
-- Benötigt einen dedizierten FFXIV-Account (nicht den Hauptaccount)
-- FFXIV muss im Fenstermodus laufen (DirectX 11)
-- .NET 7.0 Runtime erforderlich
+- Nur Windows (DirectX 11)
+- Benötigt XIVLauncher + Dalamud
 
 ---
 
 ## Architektur-Überblick
 
 ```
-FFXIVDiscordChatBridge/   ← Haupt-App (WinExe)
-  Consumer/               ← Empfängt Nachrichten von Discord & FFXIV
-  Producer/               ← Sendet Nachrichten an Discord & FFXIV
-  Program.cs              ← Einstiegspunkt
-  Startup.cs              ← DI-Konfiguration & Service-Initialisierung
-
-FFXIVHelpers/             ← Shared Library (net7.0)
-  Models/                 ← Datenmodelle (Character, FromFFXIV, Mapping, ConfirmationState)
-  Persistence/            ← IPersistence, FilePersistence
-  Extensions/             ← DiscordMessageConverter, etc.
-  FFXIVByteHandler.cs     ← FFXIV-Speicher-Parsing (via Sharlayan)
-  DiscordClientWrapper.cs ← Discord-API-Wrapper
-  UsernameMapping.cs      ← Discord ↔ FFXIV Nutzernamen-Verknüpfung
-
-FFXIVHelpers.Test/        ← Unit-Tests
-FFXIVByteParser.Test/     ← Testdaten für Byte-Parsing
-BinaryFromLogGenerator/   ← Hilfstool: generiert Test-Binärdaten aus FFXIV-Logs
+FFXIVDiscordBridgePlugin/
+  Chat/          ← IGameEventSource: ChatEventSource, DutyFinderEventSource, RetainerSaleEventSource
+  Config/        ← PluginConfig (POCO), DalamudConfigStore
+  Core/          ← Shared Interfaces (IConfigStore, IGameEventSource, IDiscordActionHandler)
+  Discord/
+    Modules/     ← Discord.Net Slash Command Module
+    Interactions/ ← IDiscordActionHandler Implementierungen (z.B. TellReplyActionHandler)
+  Gui/           ← ImGui Fenster (MainWindow, AdminRequestWindow)
+  Util/          ← SpecialCharsHandler, CharacterAvatarService, …
+  Plugin.cs      ← Dalamud-Einstiegspunkt / DI-Root
 ```
 
-**Pattern:** Producer-Consumer, Dependency Injection (Microsoft.Extensions)
+**Pattern:** Microsoft.Extensions.DI, System.Threading.Channels (Producer-Consumer), Discord.Net Interactions
 
 ---
 
@@ -52,21 +43,19 @@ BinaryFromLogGenerator/   ← Hilfstool: generiert Test-Binärdaten aus FFXIV-Lo
 
 | Paket | Version | Zweck |
 |---|---|---|
-| Discord.Net | 3.16.0 | Discord API Client |
-| Sharlayan | 8.0.1 | FFXIV Memory Reader |
-| InputSimulator | 1.0.4 | Tastatureingaben in FFXIV simulieren |
-| Microsoft.Extensions.* | 8-9.x | DI, Logging, Konfiguration |
-| NLog | 5.3.4 | Strukturiertes Logging |
-| Polly (via Http) | 8.x | HTTP Resilience (Retry/Timeout) |
+| Dalamud.NET.Sdk | 14.0.2 | Dalamud Plugin SDK |
+| Discord.Net | 3.18.0 | Discord API Client (inkl. Interactions) |
+| System.Reactive | 6.1.0 | Rx für Event-Streams |
+| NetStone | 1.3.1 | Lodestone-API (Character-Lookup) |
+| Microsoft.Extensions.DependencyInjection | 9.0.0 | DI-Container |
 
 ---
 
 ## CI/CD & Tooling
 
-- **Build/Release:** `.github/workflows/build-release-publish.yml` – Multi-Platform (Win/Ubuntu/macOS), Tests, Codecov
-- **Auto-Merge:** `.github/workflows/automerge.yml` – Dependabot PRs werden automatisch gemergt
-- **Versionierung:** Versionize (Conventional Commits → Semver)
-- **Dependabot:** Tägliche Updates für NuGet & GitHub Actions
+- **Release:** `.github/workflows/release.yml` — Tag-Push `v*` oder `workflow_dispatch`; baut, patcht Manifeste, erstellt GitHub Release mit ZIP
+- **Versionierung:** Tag-Format `vMAJOR.MINOR.PATCH[-prerelease.DATUM]`, z.B. `v0.1.0-beta.20260317`
+- **Custom Repo URL:** `https://raw.githubusercontent.com/havyrl/FFXIVDiscordChatBridge/main/repo.json`
 
 ---
 
@@ -79,7 +68,7 @@ BinaryFromLogGenerator/   ← Hilfstool: generiert Test-Binärdaten aus FFXIV-Lo
 | [decisions.md](decisions.md) | Architekturentscheidungen & Begründungen |
 | [known-issues.md](known-issues.md) | Bekannte Bugs, Einschränkungen, TODOs |
 | [sessions.md](sessions.md) | Verlauf wichtiger Session-Erkenntnisse |
-| [project_pending_features.md](project_pending_features.md) | Features aus Dalamud.DiscordBridge (Referenz) die noch portiert werden sollen |
+| [project_pending_features.md](project_pending_features.md) | Portierte Features aus Dalamud.DiscordBridge — alle implementiert, dient als Implementierungsreferenz |
 | [feedback_memory_location.md](feedback_memory_location.md) | Memories nur in `.memory/` speichern, nicht extern |
 | [feedback_localization.md](feedback_localization.md) | Jede neue user-facing Zeichenkette muss in alle Locale-Dateien (en, de) eingetragen werden |
 | [feedback_primary_constructors.md](feedback_primary_constructors.md) | C# Primary Constructor: Parameter nie gleichzeitig als Property speichern und direkt in Methoden benutzen (CS9107/CS9124) |
@@ -97,4 +86,4 @@ BinaryFromLogGenerator/   ← Hilfstool: generiert Test-Binärdaten aus FFXIV-Lo
 
 ## Letzte Aktualisierung
 
-2026-03-17 — LS/CWLS-Namen-Feature implementiert, API-Erkenntnisse notiert.
+2026-03-17 — Memory bereinigt, MEMORY.md auf aktuellen Projektstand (Dalamud-Plugin) aktualisiert.
