@@ -3,6 +3,7 @@ using Discord;
 using Discord.Interactions;
 using FFXIVDiscordBridgePlugin.Config;
 using FFXIVDiscordBridgePlugin.Core;
+using FFXIVDiscordBridgePlugin.Discord.Interactions;
 using FFXIVDiscordBridgePlugin.Util;
 
 namespace FFXIVDiscordBridgePlugin.Discord.Modules;
@@ -10,10 +11,13 @@ namespace FFXIVDiscordBridgePlugin.Discord.Modules;
 /// <summary>
 /// /config — all bridge configuration commands.
 /// Only the bridge admin may use these.
-/// Groups: channel, backchannel, webhook, dm, permissions, link
+/// Groups: channel, dm, backchannel, webhook, permissions, link
+///
+/// ChannelGroup and DmGroup expose the same subcommand surface;
+/// ChannelGroup takes an extra <see cref="ITextChannel"/> parameter.
+/// Add new shared subcommands to both groups and delegate to the shared static helpers below.
 /// </summary>
 [Group("config", "Bridge configuration (admin only).")]
-[DefaultMemberPermissions(GuildPermission.Administrator)]
 public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IConfigStore configStore)
     : LocalizedModuleBase(localizer)
 {
@@ -26,24 +30,15 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
         [SlashCommand("add", "Forward a FFXIV chat type to a Discord channel.")]
         public async Task AddAsync(
             [Summary("channel", "Discord channel")] ITextChannel channel,
-            [Summary("type", "FFXIV chat type slug (e.g. fc, say, tell)")] string type)
+            [Summary("type", "FFXIV chat type slug (e.g. fc, say, tell)")][Autocomplete(typeof(ChatTypeAutocompleteHandler))] string type)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
-
-            if (!TryParseType(type, out var chatType))
-            {
-                await RespondAsync(T("common.unknown_chat_type", type), ephemeral: true);
-                return;
-            }
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
+            if (!TryParseType(type, out var chatType)) { await RespondAsync(T("common.unknown_chat_type", type), ephemeral: true); return; }
 
             var config  = configStore.Load();
             var mapping = GetOrCreateMapping(config, channel.Id);
 
-            if (mapping.InboundChatTypes.Contains(chatType))
-            {
-                await RespondAsync(T("config.channel.already_mapped", type, channel.Id), ephemeral: true);
-                return;
-            }
+            if (mapping.InboundChatTypes.Contains(chatType)) { await RespondAsync(T("config.channel.already_mapped", type, channel.Id), ephemeral: true); return; }
 
             mapping.InboundChatTypes.Add(chatType);
             if (string.IsNullOrEmpty(mapping.Label)) mapping.Label = channel.Name;
@@ -55,73 +50,81 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
         [SlashCommand("remove", "Stop forwarding a FFXIV chat type to a Discord channel.")]
         public async Task RemoveAsync(
             [Summary("channel", "Discord channel")] ITextChannel channel,
-            [Summary("type", "FFXIV chat type slug")] string type)
+            [Summary("type", "FFXIV chat type slug")][Autocomplete(typeof(ChatTypeAutocompleteHandler))] string type)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
-
-            if (!TryParseType(type, out var chatType))
-            {
-                await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true);
-                return;
-            }
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
+            if (!TryParseType(type, out var chatType)) { await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true); return; }
 
             var config  = configStore.Load();
             var mapping = config.ChannelMappings.FirstOrDefault(m => m.DiscordChannelId == channel.Id);
 
-            if (mapping is null || !mapping.InboundChatTypes.Remove(chatType))
-            {
-                await RespondAsync(T("config.channel.not_mapped", type, channel.Id), ephemeral: true);
-                return;
-            }
+            if (mapping is null || !mapping.InboundChatTypes.Remove(chatType)) { await RespondAsync(T("config.channel.not_mapped", type, channel.Id), ephemeral: true); return; }
 
             configStore.Save(config);
             await RespondAsync(T("config.channel.removed", ChatTypeHelper.GetFancyName(chatType), channel.Id), ephemeral: true);
         }
 
+        [SlashCommand("duty", "Enable or disable Duty Finder pop notifications for a channel.")]
+        public async Task DutyAsync(
+            [Summary("channel", "Discord channel")] ITextChannel channel,
+            [Summary("enabled", "true to enable, false to disable")] bool enabled)
+        {
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
+
+            var config  = configStore.Load();
+            var mapping = GetOrCreateMapping(config, channel.Id);
+            if (string.IsNullOrEmpty(mapping.Label)) mapping.Label = channel.Name;
+            mapping.IsContentFinder = enabled;
+            configStore.Save(config);
+
+            await RespondAsync(T(enabled ? "config.channel.duty_enabled" : "config.channel.duty_disabled", channel.Id), ephemeral: true);
+        }
+
+        [SlashCommand("party", "Enable or disable party invite notifications for a channel.")]
+        public async Task PartyAsync(
+            [Summary("channel", "Discord channel")] ITextChannel channel,
+            [Summary("enabled", "true to enable, false to disable")] bool enabled)
+        {
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
+
+            var config  = configStore.Load();
+            var mapping = GetOrCreateMapping(config, channel.Id);
+            if (string.IsNullOrEmpty(mapping.Label)) mapping.Label = channel.Name;
+            mapping.IsPartyInvite = enabled;
+            configStore.Save(config);
+
+            await RespondAsync(T(enabled ? "config.channel.party_enabled" : "config.channel.party_disabled", channel.Id), ephemeral: true);
+        }
+
         [SlashCommand("info", "Show the mapping for the current channel.")]
         public async Task InfoAsync()
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
 
             var config  = configStore.Load();
             var mapping = config.ChannelMappings.FirstOrDefault(m => m.DiscordChannelId == Context.Channel.Id);
 
-            if (mapping is null)
-            {
-                await RespondAsync(T("config.channel.info_not_configured"), ephemeral: true);
-                return;
-            }
+            if (mapping is null) { await RespondAsync(T("config.channel.info_not_configured"), ephemeral: true); return; }
 
-            var types = mapping.InboundChatTypes.Count > 0
-                ? $"`{string.Join(", ", mapping.InboundChatTypes.Select(ChatTypeHelper.GetSlug))}`"
-                : "*(none)*";
-            var back = mapping.BackChannelType.HasValue
-                ? $"`{ChatTypeHelper.GetSlug(mapping.BackChannelType.Value)}`"
-                : "*(none)*";
-            var webhook = string.IsNullOrEmpty(mapping.WebhookUrl) ? "*(none)*" : "✅ configured";
+            var embed = BuildInfoEmbed(mapping, T("config.channel.info_title"),
+                T("config.channel.info_inbound"), T("config.channel.info_duty"), T("config.channel.info_party"),
+                backLabel: T("config.channel.info_back"), webhookLabel: T("config.channel.info_webhook"));
 
-            var embed = new EmbedBuilder()
-                .WithTitle(T("config.channel.info_title"))
-                .WithColor(0x478CFF)
-                .AddField(T("config.channel.info_inbound"),  types,   inline: false)
-                .AddField(T("config.channel.info_back"),     back,    inline: true)
-                .AddField(T("config.channel.info_webhook"),  webhook, inline: true)
-                .Build();
+            var components = ChannelInfoButtons.Build(
+                Localizer, mapping.DiscordChannelId,
+                mapping.IsContentFinder, mapping.IsPartyInvite,
+                Context.Interaction.UserLocale);
 
-            await RespondAsync(embed: embed, ephemeral: true);
+            await RespondAsync(embed: embed, components: components, ephemeral: true);
         }
 
         [SlashCommand("list", "List all current channel mappings.")]
         public async Task ListAsync()
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
 
             var config = configStore.Load();
-            if (config.ChannelMappings.Count == 0)
-            {
-                await RespondAsync(T("config.channel.no_mappings"), ephemeral: true);
-                return;
-            }
+            if (config.ChannelMappings.Count == 0) { await RespondAsync(T("config.channel.no_mappings"), ephemeral: true); return; }
 
             var lines = config.ChannelMappings.Select(m =>
             {
@@ -143,23 +146,100 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
         }
     }
 
+    // ── /config dm ────────────────────────────────────────────────────────
+    // Mirrors ChannelGroup without the ITextChannel parameter.
+    // Keep both groups in sync when adding new subcommands.
+
+    [Group("dm", "Configure FFXIV chat types forwarded to your DM.")]
+    public sealed class DmGroup(ILocalizer localizer, PermissionGuard guard, IConfigStore configStore)
+        : LocalizedModuleBase(localizer)
+    {
+        [SlashCommand("add", "Forward a FFXIV chat type to the admin's DM.")]
+        public async Task AddAsync([Summary("type", "FFXIV chat type slug")][Autocomplete(typeof(ChatTypeAutocompleteHandler))] string type)
+        {
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
+            if (!TryParseType(type, out var chatType)) { await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true); return; }
+
+            var config  = configStore.Load();
+            var mapping = GetOrCreateDmMapping(config);
+
+            if (!mapping.InboundChatTypes.Contains(chatType))
+                mapping.InboundChatTypes.Add(chatType);
+
+            configStore.Save(config);
+            await RespondAsync(T("config.dm.added", ChatTypeHelper.GetFancyName(chatType)), ephemeral: true);
+        }
+
+        [SlashCommand("remove", "Stop forwarding a FFXIV chat type to the admin's DM.")]
+        public async Task RemoveAsync([Summary("type", "FFXIV chat type slug")][Autocomplete(typeof(ChatTypeAutocompleteHandler))] string type)
+        {
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
+            if (!TryParseType(type, out var chatType)) { await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true); return; }
+
+            var config  = configStore.Load();
+            var mapping = config.ChannelMappings.FirstOrDefault(m => m.IsDm);
+            mapping?.InboundChatTypes.Remove(chatType);
+            configStore.Save(config);
+
+            await RespondAsync(T("config.dm.removed", ChatTypeHelper.GetFancyName(chatType)), ephemeral: true);
+        }
+
+        [SlashCommand("duty", "Enable or disable Duty Finder pop notifications in DM.")]
+        public async Task DutyAsync([Summary("enabled", "true to enable, false to disable")] bool enabled)
+        {
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
+
+            var config  = configStore.Load();
+            var mapping = GetOrCreateDmMapping(config);
+            mapping.IsContentFinder = enabled;
+            configStore.Save(config);
+
+            await RespondAsync(T(enabled ? "config.dm.duty_enabled" : "config.dm.duty_disabled"), ephemeral: true);
+        }
+
+        [SlashCommand("party", "Enable or disable party invite notifications in DM.")]
+        public async Task PartyAsync([Summary("enabled", "true to enable, false to disable")] bool enabled)
+        {
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
+
+            var config  = configStore.Load();
+            var mapping = GetOrCreateDmMapping(config);
+            mapping.IsPartyInvite = enabled;
+            configStore.Save(config);
+
+            await RespondAsync(T(enabled ? "config.dm.party_enabled" : "config.dm.party_disabled"), ephemeral: true);
+        }
+
+        [SlashCommand("info", "Show the current DM mapping configuration.")]
+        public async Task InfoAsync()
+        {
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
+
+            var config  = configStore.Load();
+            var mapping = config.ChannelMappings.FirstOrDefault(m => m.IsDm);
+
+            if (mapping is null) { await RespondAsync(T("config.dm.info_not_configured"), ephemeral: true); return; }
+
+            var embed = BuildInfoEmbed(mapping, T("config.dm.info_title"),
+                T("config.channel.info_inbound"), T("config.channel.info_duty"), T("config.channel.info_party"));
+
+            await RespondAsync(embed: embed, ephemeral: true);
+        }
+    }
+
     // ── /config backchannel ────────────────────────────────────────────────
 
     [SlashCommand("backchannel", "Set or clear the Discord→FFXIV back-channel for a mapping.")]
     public async Task BackchannelAsync(
         [Summary("channel", "Discord channel")] ITextChannel channel,
-        [Summary("type", "FFXIV chat type slug, or 'none' to disable")] string type)
+        [Summary("type", "FFXIV chat type slug, or 'none' to disable")][Autocomplete(typeof(ChatTypeAutocompleteHandler))] string type)
     {
-        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+        if (!await RequireAdminAsync(guard.IsAdmin)) return;
 
         var config  = configStore.Load();
         var mapping = config.ChannelMappings.FirstOrDefault(m => m.DiscordChannelId == channel.Id);
 
-        if (mapping is null)
-        {
-            await RespondAsync(T("config.backchannel.no_mapping", channel.Id), ephemeral: true);
-            return;
-        }
+        if (mapping is null) { await RespondAsync(T("config.backchannel.no_mapping", channel.Id), ephemeral: true); return; }
 
         if (type.Equals("none", StringComparison.OrdinalIgnoreCase))
         {
@@ -169,11 +249,7 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
             return;
         }
 
-        if (!TryParseType(type, out var chatType))
-        {
-            await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true);
-            return;
-        }
+        if (!TryParseType(type, out var chatType)) { await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true); return; }
 
         mapping.BackChannelType = chatType;
         configStore.Save(config);
@@ -187,7 +263,7 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
         [Summary("channel", "Discord channel")] ITextChannel channel,
         [Summary("url", "Webhook URL")] string url)
     {
-        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+        if (!await RequireAdminAsync(guard.IsAdmin)) return;
 
         var config  = configStore.Load();
         var mapping = GetOrCreateMapping(config, channel.Id);
@@ -196,57 +272,6 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
         configStore.Save(config);
 
         await RespondAsync(T("config.webhook.set", channel.Id), ephemeral: true);
-    }
-
-    // ── /config dm ────────────────────────────────────────────────────────
-
-    [Group("dm", "Configure FFXIV chat types forwarded to your DM.")]
-    public sealed class DmGroup(ILocalizer localizer, PermissionGuard guard, IConfigStore configStore)
-        : LocalizedModuleBase(localizer)
-    {
-        [SlashCommand("add", "Forward a FFXIV chat type to the admin's DM.")]
-        public async Task AddAsync([Summary("type", "FFXIV chat type slug")] string type)
-        {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
-
-            if (!TryParseType(type, out var chatType))
-            {
-                await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true);
-                return;
-            }
-
-            var config  = configStore.Load();
-            var mapping = config.ChannelMappings.FirstOrDefault(m => m.IsDm)
-                          ?? new ChannelMapping { IsDm = true, Label = "DM" };
-
-            if (!config.ChannelMappings.Contains(mapping))
-                config.ChannelMappings.Add(mapping);
-
-            if (!mapping.InboundChatTypes.Contains(chatType))
-                mapping.InboundChatTypes.Add(chatType);
-
-            configStore.Save(config);
-            await RespondAsync(T("config.dm.added", ChatTypeHelper.GetFancyName(chatType)), ephemeral: true);
-        }
-
-        [SlashCommand("remove", "Stop forwarding a FFXIV chat type to the admin's DM.")]
-        public async Task RemoveAsync([Summary("type", "FFXIV chat type slug")] string type)
-        {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
-
-            if (!TryParseType(type, out var chatType))
-            {
-                await RespondAsync(T("common.unknown_chat_type_short", type), ephemeral: true);
-                return;
-            }
-
-            var config  = configStore.Load();
-            var mapping = config.ChannelMappings.FirstOrDefault(m => m.IsDm);
-            mapping?.InboundChatTypes.Remove(chatType);
-            configStore.Save(config);
-
-            await RespondAsync(T("config.dm.removed", ChatTypeHelper.GetFancyName(chatType)), ephemeral: true);
-        }
     }
 
     // ── /config permissions ────────────────────────────────────────────────
@@ -263,7 +288,7 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
             [Summary("chat", "Can use /say, /fc, etc.")] bool chat = false,
             [Summary("status", "Can view bridge status")] bool status = true)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
 
             var config = configStore.Load();
             config.Whitelist.RemoveAll(e => !e.IsRole && e.DiscordId == user.Id);
@@ -291,7 +316,7 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
             [Summary("chat", "Can use /say, /fc, etc.")] bool chat = false,
             [Summary("status", "Can view bridge status")] bool status = true)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
 
             var config = configStore.Load();
             config.Whitelist.RemoveAll(e => e.IsRole && e.DiscordId == role.Id);
@@ -314,13 +339,9 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
         [SlashCommand("remove", "Remove a user or role from the whitelist.")]
         public async Task RemoveAsync([Summary("id", "Discord user or role ID")] string id)
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
 
-            if (!ulong.TryParse(id, out var discordId))
-            {
-                await RespondAsync(T("config.permissions.invalid_id"), ephemeral: true);
-                return;
-            }
+            if (!ulong.TryParse(id, out var discordId)) { await RespondAsync(T("config.permissions.invalid_id"), ephemeral: true); return; }
 
             var config  = configStore.Load();
             var removed = config.Whitelist.RemoveAll(e => e.DiscordId == discordId);
@@ -334,14 +355,10 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
         [SlashCommand("list", "Show all whitelist entries.")]
         public async Task ListAsync()
         {
-            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+            if (!await RequireAdminAsync(guard.IsAdmin)) return;
 
             var config = configStore.Load();
-            if (config.Whitelist.Count == 0)
-            {
-                await RespondAsync(T("config.permissions.empty"), ephemeral: true);
-                return;
-            }
+            if (config.Whitelist.Count == 0) { await RespondAsync(T("config.permissions.empty"), ephemeral: true); return; }
 
             var lines = config.Whitelist.Select(e =>
             {
@@ -371,7 +388,7 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
         [Summary("user", "Discord user")] IUser user,
         [Summary("character", "FFXIV character name, e.g. Firstname Lastname@World")] string character)
     {
-        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+        if (!await RequireAdminAsync(guard.IsAdmin)) return;
 
         var config = configStore.Load();
         config.CharLinks.RemoveAll(l => l.DiscordUserId == user.Id);
@@ -384,7 +401,7 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
     [SlashCommand("unlink", "Remove the FFXIV↔Discord character link for a user.")]
     public async Task UnlinkAsync([Summary("user", "Discord user")] IUser user)
     {
-        if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+        if (!await RequireAdminAsync(guard.IsAdmin)) return;
 
         var config  = configStore.Load();
         var removed = config.CharLinks.RemoveAll(l => l.DiscordUserId == user.Id);
@@ -395,8 +412,9 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
             ephemeral: true);
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    // ── Shared static helpers ──────────────────────────────────────────────
 
+    /// <summary>Gets or creates a <see cref="ChannelMapping"/> for a guild channel.</summary>
     private static ChannelMapping GetOrCreateMapping(PluginConfig config, ulong channelId)
     {
         var mapping = config.ChannelMappings.FirstOrDefault(m => m.DiscordChannelId == channelId);
@@ -405,6 +423,54 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
         mapping = new ChannelMapping { DiscordChannelId = channelId };
         config.ChannelMappings.Add(mapping);
         return mapping;
+    }
+
+    /// <summary>Gets or creates the single DM <see cref="ChannelMapping"/>.</summary>
+    private static ChannelMapping GetOrCreateDmMapping(PluginConfig config)
+    {
+        var mapping = config.ChannelMappings.FirstOrDefault(m => m.IsDm)
+                      ?? new ChannelMapping { IsDm = true, Label = "DM" };
+        if (!config.ChannelMappings.Contains(mapping))
+            config.ChannelMappings.Add(mapping);
+        return mapping;
+    }
+
+    /// <summary>
+    /// Builds a mapping info embed for both channel and DM contexts.
+    /// Pass <paramref name="backLabel"/> and <paramref name="webhookLabel"/> only for channel mappings.
+    /// </summary>
+    private static Embed BuildInfoEmbed(ChannelMapping mapping, string title,
+        string inboundLabel, string dutyLabel, string partyLabel,
+        string? backLabel = null, string? webhookLabel = null)
+    {
+        var types = mapping.InboundChatTypes.Count > 0
+            ? $"`{string.Join(", ", mapping.InboundChatTypes.Select(ChatTypeHelper.GetSlug))}`"
+            : "*(none)*";
+
+        var builder = new EmbedBuilder()
+            .WithTitle(title)
+            .WithColor(0x478CFF)
+            .AddField(inboundLabel, types, inline: false);
+
+        if (backLabel is not null)
+        {
+            var back = mapping.BackChannelType.HasValue
+                ? $"`{ChatTypeHelper.GetSlug(mapping.BackChannelType.Value)}`"
+                : "*(none)*";
+            builder.AddField(backLabel, back, inline: true);
+        }
+
+        if (webhookLabel is not null)
+        {
+            var webhook = string.IsNullOrEmpty(mapping.WebhookUrl) ? "*(none)*" : "✅ configured";
+            builder.AddField(webhookLabel, webhook, inline: true);
+        }
+
+        builder
+            .AddField(dutyLabel,  mapping.IsContentFinder ? "✅" : "❌", inline: true)
+            .AddField(partyLabel, mapping.IsPartyInvite   ? "✅" : "❌", inline: true);
+
+        return builder.Build();
     }
 
     private static bool TryParseType(string slug, out XivChatType result)
