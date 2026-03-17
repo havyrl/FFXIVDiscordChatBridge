@@ -12,6 +12,12 @@ public sealed class PluginConfig : IPluginConfiguration
     // ── Bot ────────────────────────────────────────────────────────────────
     public string BotToken { get; set; } = string.Empty;
 
+    /// <summary>
+    /// When set, slash commands are registered to this guild only (instant propagation).
+    /// Leave at 0 for global registration (up to 1 h propagation delay).
+    /// </summary>
+    public ulong PrimaryGuildId { get; set; }
+
     // ── Duplicate filter ───────────────────────────────────────────────────
     /// <summary>
     /// Time window in milliseconds within which identical messages are suppressed.
@@ -65,6 +71,9 @@ public sealed class ChannelMapping
 
     /// <summary>When true, this channel receives Duty Finder pop notifications.</summary>
     public bool IsContentFinder { get; set; }
+
+    /// <summary>When true, this channel receives party invite notifications.</summary>
+    public bool IsPartyInvite { get; set; }
 
     /// <summary>When true, this channel receives Retainer Sale notifications (with item icon).</summary>
     public bool IsRetainerSale { get; set; }
