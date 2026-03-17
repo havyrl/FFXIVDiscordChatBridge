@@ -1,21 +1,29 @@
 using System.Collections.Concurrent;
-using System.Net.Http;
-using System.Text.Json;
 using Dalamud.Plugin.Services;
+using NetStone;
+using NetStone.Search.Character;
 
 namespace FFXIVDiscordBridgePlugin.Core;
 
 /// <summary>
-/// Fetches character avatar URLs from XIVAPI and caches them for the lifetime of the plugin.
+/// Fetches character avatar URLs from the Lodestone via the NetStone library and caches
+/// them for the lifetime of the plugin.
 /// Results (including "not found") are cached to avoid repeated HTTP calls for the same character.
 /// </summary>
 public sealed class CharacterAvatarService : IDisposable
 {
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(8) };
-
-    private readonly ConcurrentDictionary<string, string?> _cache =
+    // Caches the Task itself so concurrent requests for the same character share one in-flight
+    // HTTP fetch (CompletableFuture-style). Lazy<Task> ensures the factory runs exactly once
+    // even when multiple threads race on GetOrAdd before the key is present.
+    private readonly ConcurrentDictionary<string, Lazy<Task<string?>>> _cache =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly IPluginLog _log;
+    private readonly SemaphoreSlim _initLock = new(1, 1);
+    private LodestoneClient? _lodestone;
+
+    /// <summary>Fallback avatar URL used for system/non-character messages.</summary>
+    public const string FallbackAvatarUrl =
+        "https://raw.githubusercontent.com/goatcorp/DalamudAssets/master/UIRes/logo.png";
 
     public CharacterAvatarService(IPluginLog log) => _log = log;
 
@@ -23,50 +31,83 @@ public sealed class CharacterAvatarService : IDisposable
 
     /// <summary>
     /// Returns the Lodestone avatar URL for the given character, or <c>null</c> if not found.
-    /// The first call for a character performs an HTTP request; subsequent calls return the cached value.
+    /// The first call for a character performs up to two HTTP requests; subsequent calls return
+    /// the cached value.
     /// </summary>
-    public async Task<string?> GetAvatarUrlAsync(string characterName, string world)
+    public Task<string?> GetAvatarUrlAsync(string characterName, string world)
     {
         var key = $"{characterName}@{world}";
-        if (_cache.TryGetValue(key, out var cached))
-            return cached;
-
-        var avatarUrl = await FetchAvatarUrlAsync(characterName, world);
-        _cache[key] = avatarUrl; // cache null as negative result
-        return avatarUrl;
+        return _cache.GetOrAdd(key,
+            k => new Lazy<Task<string?>>(
+                () => FetchAvatarUrlAsync(characterName, world),
+                LazyThreadSafetyMode.ExecutionAndPublication)).Value;
     }
 
     // ── Private ────────────────────────────────────────────────────────────
+
+    private async Task<LodestoneClient> GetClientAsync()
+    {
+        if (_lodestone is not null) return _lodestone;
+
+        await _initLock.WaitAsync();
+        try
+        {
+            _lodestone ??= await LodestoneClient.GetClientAsync();
+            return _lodestone;
+        }
+        finally { _initLock.Release(); }
+    }
 
     private async Task<string?> FetchAvatarUrlAsync(string characterName, string world)
     {
         try
         {
-            var encodedName = Uri.EscapeDataString(characterName);
-            var url = $"https://xivapi.com/character/search?name={encodedName}&server={world}";
-            var json = await Http.GetStringAsync(url);
+            var client = await GetClientAsync();
 
-            using var doc = JsonDocument.Parse(json);
-            if (!doc.RootElement.TryGetProperty("Results", out var results))
-                return null;
+            _log.Debug("[AvatarService] Searching Lodestone for {Name}@{World}", characterName, world);
 
-            foreach (var result in results.EnumerateArray())
+            var searchPage = await client.SearchCharacter(new CharacterSearchQuery
             {
-                if (!result.TryGetProperty("Name", out var nameProp)) continue;
-                if (!nameProp.GetString()?.Equals(characterName, StringComparison.OrdinalIgnoreCase) == true) continue;
-                if (result.TryGetProperty("Avatar", out var avatarProp))
-                    return avatarProp.GetString();
+                CharacterName = characterName,
+                World         = world,
+            });
+
+            if (searchPage?.Results is null)
+            {
+                _log.Warning("[AvatarService] Null result from Lodestone search for {Name}@{World}", characterName, world);
+                return null;
             }
 
-            _log.Debug("[AvatarService] No result for {Name}@{World}", characterName, world);
+            var entry = searchPage.Results
+                .FirstOrDefault(r => string.Equals(r.Name, characterName, StringComparison.OrdinalIgnoreCase));
+
+            if (entry is null)
+            {
+                _log.Warning("[AvatarService] No matching character '{Name}' on '{World}' in Lodestone results", characterName, world);
+                return null;
+            }
+
+            var character = await entry.GetCharacter();
+            if (character is null)
+            {
+                _log.Warning("[AvatarService] Failed to fetch character details for {Name}@{World}", characterName, world);
+                return null;
+            }
+
+            var avatarUrl = character.Avatar?.ToString();
+            _log.Debug("[AvatarService] Found avatar for {Name}@{World}: {AvatarUrl}", characterName, world, avatarUrl ?? "(null)");
+            return avatarUrl;
         }
         catch (Exception ex)
         {
             _log.Warning(ex, "[AvatarService] Failed to fetch avatar for {Name}@{World}", characterName, world);
+            return null;
         }
-
-        return null;
     }
 
-    public void Dispose() { /* Http is static — not disposed here */ }
+    public void Dispose()
+    {
+        (_lodestone as IDisposable)?.Dispose();
+        _initLock.Dispose();
+    }
 }
