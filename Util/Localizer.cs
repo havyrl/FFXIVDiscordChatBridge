@@ -78,11 +78,24 @@ public sealed class Localizer : ILocalizer
 public abstract class LocalizedModuleBase(ILocalizer localizer)
     : InteractionModuleBase<SocketInteractionContext>
 {
+    protected ILocalizer Localizer { get; } = localizer;
+
     /// <summary>Returns the localized string for <paramref name="key"/> in the current user's Discord locale.</summary>
     protected string T(string key)
-        => localizer.T(key, Context.Interaction.UserLocale);
+        => Localizer.T(key, Context.Interaction.UserLocale);
 
     /// <summary>Returns the localized string formatted with <paramref name="args"/>.</summary>
     protected string T(string key, params object[] args)
-        => string.Format(localizer.T(key, Context.Interaction.UserLocale), args);
+        => string.Format(Localizer.T(key, Context.Interaction.UserLocale), args);
+
+    /// <summary>
+    /// Responds with "admin only" and returns false if <paramref name="isAdmin"/> returns false.
+    /// Usage: <c>if (!await RequireAdminAsync(guard.IsAdmin)) return;</c>
+    /// </summary>
+    protected async Task<bool> RequireAdminAsync(Func<ulong, bool> isAdmin)
+    {
+        if (isAdmin(Context.User.Id)) return true;
+        await RespondAsync(T("common.admin_only"), ephemeral: true);
+        return false;
+    }
 }
