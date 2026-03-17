@@ -24,9 +24,6 @@ obj/
 packages/
 !packages.lock.json
 
-# Dalamud plugin config (contains Discord tokens & channel IDs — never commit)
-FFXIVDiscordBridgePlugin.json
-
 # OS
 .DS_Store
 Thumbs.db

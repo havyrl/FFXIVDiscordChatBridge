@@ -1,0 +1,12 @@
+{
+  "Author": "Pryos",
+  "Name": "FFXIV Discord Bridge",
+  "Punchline": "Bridges FFXIV chat with Discord via webhooks and slash commands.",
+  "Description": "Forwards FFXIV chat channels to Discord via webhooks and allows sending messages back from Discord using slash commands.",
+  "InternalName": "FFXIVDiscordBridgePlugin",
+  "RepoUrl": "https://github.com/havyrl/FFXIVDiscordChatBridge",
+  "ApplicableVersion": "any",
+  "Tags": ["chat", "discord", "bridge"],
+  "DalamudApiLevel": 14,
+  "TestingAssemblyVersion": "0.1.0.0"
+}
