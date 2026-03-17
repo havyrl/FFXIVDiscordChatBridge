@@ -1,0 +1,291 @@
+using System.Numerics;
+using Dalamud.Game.Text;
+using Dalamud.Interface.Windowing;
+using Dalamud.Bindings.ImGui;
+using FFXIVDiscordBridgePlugin.Config;
+using FFXIVDiscordBridgePlugin.Core;
+using FFXIVDiscordBridgePlugin.Discord;
+using FFXIVDiscordBridgePlugin.Util;
+
+namespace FFXIVDiscordBridgePlugin.Gui;
+
+/// <summary>
+/// Main plugin window opened via /discordbridge or the Dalamud plugin menu.
+/// Tabs: Bot Settings | Channels | Whitelist | Character Links
+/// </summary>
+public sealed class MainWindow(IConfigStore configStore, BotService botService)
+    : Window("FFXIV Discord Bridge", ImGuiWindowFlags.None)
+{
+    private PluginConfig _config = null!;
+
+    // ── Per-tab edit state ─────────────────────────────────────────────────
+    private string _botToken        = string.Empty;
+    private string _adminUserId     = string.Empty;
+    private bool   _tokenDirty;
+
+    // Channel tab
+    private string _newChannelId    = string.Empty;
+    private string _newWebhookUrl   = string.Empty;
+    private string _newLabel        = string.Empty;
+    private int    _selectedTypeIdx = 0;
+
+    // Whitelist tab
+    private string _wlDiscordId     = string.Empty;
+    private bool   _wlIsRole;
+    private bool   _wlBackChannel, _wlTell, _wlChat, _wlStatus = true;
+
+    // Char link tab
+    private string _linkDiscordId   = string.Empty;
+    private string _linkCharacter   = string.Empty;
+
+    public override void OnOpen()
+    {
+        _config      = configStore.Load();
+        _botToken    = _config.BotToken;
+        _adminUserId = _config.AdminDiscordUserId == 0 ? string.Empty
+                       : _config.AdminDiscordUserId.ToString();
+        _tokenDirty  = false;
+    }
+
+    public override void Draw()
+    {
+        _config ??= configStore.Load();
+
+        if (!ImGui.BeginTabBar("##tabs")) return;
+
+        if (ImGui.BeginTabItem("Bot Settings"))  { DrawBotTab();      ImGui.EndTabItem(); }
+        if (ImGui.BeginTabItem("Channels"))       { DrawChannelsTab(); ImGui.EndTabItem(); }
+        if (ImGui.BeginTabItem("Whitelist"))      { DrawWhitelistTab(); ImGui.EndTabItem(); }
+        if (ImGui.BeginTabItem("Character Links")){ DrawCharLinksTab(); ImGui.EndTabItem(); }
+
+        ImGui.EndTabBar();
+    }
+
+    // ── Bot Settings ───────────────────────────────────────────────────────
+
+    private void DrawBotTab()
+    {
+        var status = botService.IsConnected ? "Connected ✅" : "Disconnected ❌";
+        ImGui.TextColored(botService.IsConnected ? new Vector4(0.28f, 0.55f, 1f, 1f)
+                                                 : new Vector4(0.82f, 0.05f, 0.01f, 1f),
+                          $"Status: {status}");
+        ImGui.Spacing();
+
+        ImGui.Text("Bot Token");
+        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+        if (ImGui.InputText("##token", ref _botToken, 100, ImGuiInputTextFlags.Password))
+            _tokenDirty = true;
+
+        ImGui.Spacing();
+        ImGui.Text("Admin Discord User ID");
+        ImGui.SetNextItemWidth(200);
+        ImGui.InputText("##adminid", ref _adminUserId, 24);
+
+        ImGui.Spacing();
+        if (ImGui.Button("Save & Restart Bot"))
+        {
+            _config.BotToken = _botToken;
+            if (ulong.TryParse(_adminUserId, out var uid))
+                _config.AdminDiscordUserId = uid;
+            configStore.Save(_config);
+            _tokenDirty = false;
+
+            _ = Task.Run(async () =>
+            {
+                await botService.StopAsync();
+                await botService.StartAsync();
+            });
+        }
+
+        if (_tokenDirty)
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0f, 1f), "Unsaved changes");
+        }
+    }
+
+    // ── Channels ───────────────────────────────────────────────────────────
+
+    private void DrawChannelsTab()
+    {
+        ImGui.Text("Channel Mappings");
+        ImGui.Separator();
+
+        if (_config.ChannelMappings.Count == 0)
+            ImGui.TextDisabled("No mappings configured yet.");
+
+        ChannelMapping? toRemove = null;
+        foreach (var mapping in _config.ChannelMappings)
+        {
+            var label  = mapping.IsDm ? "DM" : (string.IsNullOrEmpty(mapping.Label)
+                         ? mapping.DiscordChannelId.ToString() : mapping.Label);
+            var types  = string.Join(", ", mapping.InboundChatTypes.Select(ChatTypeHelper.GetSlug));
+            var back   = mapping.BackChannelType.HasValue
+                         ? $" → back: {ChatTypeHelper.GetSlug(mapping.BackChannelType.Value)}" : "";
+
+            ImGui.BulletText($"{label}  [{types}]{back}");
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"Remove##rm{mapping.DiscordChannelId}"))
+                toRemove = mapping;
+        }
+
+        if (toRemove is not null)
+        {
+            _config.ChannelMappings.Remove(toRemove);
+            configStore.Save(_config);
+        }
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Text("Add Mapping");
+
+        ImGui.SetNextItemWidth(160);
+        ImGui.InputText("Channel ID##chid", ref _newChannelId, 24);
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(240);
+        ImGui.InputText("Webhook URL##wh", ref _newWebhookUrl, 256);
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(120);
+        ImGui.InputText("Label##lbl", ref _newLabel, 48);
+
+        var typeNames = ChatTypeHelper.All.Values.Select(v => v.FancyName).ToArray();
+        ImGui.SetNextItemWidth(200);
+        ImGui.Combo("Chat Type##ct", ref _selectedTypeIdx, typeNames, typeNames.Length);
+
+        if (ImGui.Button("Add##addch"))
+        {
+            if (ulong.TryParse(_newChannelId, out var chId) && !string.IsNullOrWhiteSpace(_newWebhookUrl))
+            {
+                var chatType = ChatTypeHelper.All.Keys.ElementAt(_selectedTypeIdx);
+                var existing = _config.ChannelMappings.FirstOrDefault(m => m.DiscordChannelId == chId);
+                if (existing is null)
+                {
+                    existing = new ChannelMapping
+                    {
+                        DiscordChannelId = chId,
+                        WebhookUrl       = _newWebhookUrl,
+                        Label            = _newLabel,
+                    };
+                    _config.ChannelMappings.Add(existing);
+                }
+                if (!existing.InboundChatTypes.Contains(chatType))
+                    existing.InboundChatTypes.Add(chatType);
+
+                configStore.Save(_config);
+                _newChannelId = _newWebhookUrl = _newLabel = string.Empty;
+            }
+        }
+    }
+
+    // ── Whitelist ──────────────────────────────────────────────────────────
+
+    private void DrawWhitelistTab()
+    {
+        ImGui.Text("Whitelist");
+        ImGui.Separator();
+
+        WhitelistEntry? toRemove = null;
+        foreach (var entry in _config.Whitelist)
+        {
+            var kind  = entry.IsRole ? "Role" : "User";
+            var perms = BuildPermString(entry.Permissions);
+            ImGui.BulletText($"[{kind}] {entry.DiscordId}  ({perms})");
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"Remove##wlrm{entry.DiscordId}"))
+                toRemove = entry;
+        }
+        if (toRemove is not null)
+        {
+            _config.Whitelist.Remove(toRemove);
+            configStore.Save(_config);
+        }
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Text("Add Entry");
+
+        ImGui.SetNextItemWidth(180);
+        ImGui.InputText("User/Role ID##wlid", ref _wlDiscordId, 24);
+        ImGui.SameLine();
+        ImGui.Checkbox("Is Role##wlrole", ref _wlIsRole);
+
+        ImGui.Checkbox("Back-channel##wlbc", ref _wlBackChannel); ImGui.SameLine();
+        ImGui.Checkbox("Tell##wltell",        ref _wlTell);        ImGui.SameLine();
+        ImGui.Checkbox("Chat##wlchat",        ref _wlChat);        ImGui.SameLine();
+        ImGui.Checkbox("Status##wlst",        ref _wlStatus);
+
+        if (ImGui.Button("Add##wladd") && ulong.TryParse(_wlDiscordId, out var wlId))
+        {
+            _config.Whitelist.RemoveAll(e => e.DiscordId == wlId);
+            _config.Whitelist.Add(new WhitelistEntry
+            {
+                DiscordId   = wlId,
+                IsRole      = _wlIsRole,
+                Permissions = new WhitelistPermissions
+                {
+                    CanSendToBackChannel = _wlBackChannel,
+                    CanSendTell          = _wlTell,
+                    CanUseChatCommands   = _wlChat,
+                    CanViewStatus        = _wlStatus,
+                },
+            });
+            configStore.Save(_config);
+            _wlDiscordId = string.Empty;
+        }
+    }
+
+    // ── Character Links ────────────────────────────────────────────────────
+
+    private void DrawCharLinksTab()
+    {
+        ImGui.Text("FFXIV Character ↔ Discord User Links");
+        ImGui.TextDisabled("Linked characters get a Reply button on incoming Tell messages.");
+        ImGui.Separator();
+
+        CharLink? toRemove = null;
+        foreach (var link in _config.CharLinks)
+        {
+            ImGui.BulletText($"{link.FfxivCharacter}  ↔  {link.DiscordUserId}");
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"Remove##clrm{link.DiscordUserId}"))
+                toRemove = link;
+        }
+        if (toRemove is not null)
+        {
+            _config.CharLinks.Remove(toRemove);
+            configStore.Save(_config);
+        }
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Text("Add Link");
+
+        ImGui.SetNextItemWidth(200);
+        ImGui.InputText("Character (Name@World)##clchar", ref _linkCharacter, 64);
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(180);
+        ImGui.InputText("Discord User ID##cluid", ref _linkDiscordId, 24);
+
+        if (ImGui.Button("Link##cladd")
+            && ulong.TryParse(_linkDiscordId, out var clId)
+            && !string.IsNullOrWhiteSpace(_linkCharacter))
+        {
+            _config.CharLinks.RemoveAll(l => l.DiscordUserId == clId);
+            _config.CharLinks.Add(new CharLink { DiscordUserId = clId, FfxivCharacter = _linkCharacter });
+            configStore.Save(_config);
+            _linkDiscordId = _linkCharacter = string.Empty;
+        }
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    private static string BuildPermString(WhitelistPermissions p)
+    {
+        var parts = new List<string>();
+        if (p.CanSendToBackChannel) parts.Add("back-channel");
+        if (p.CanSendTell)          parts.Add("tell");
+        if (p.CanUseChatCommands)   parts.Add("chat");
+        if (p.CanViewStatus)        parts.Add("status");
+        return parts.Count > 0 ? string.Join(", ", parts) : "none";
+    }
+}

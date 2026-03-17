@@ -1,0 +1,37 @@
+# Build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# VS Code (keep shared config, ignore personal overrides)
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+
+# Rider
+.idea/
+
+# NuGet — keep lock file, ignore downloaded packages
+packages/
+!packages.lock.json
+
+# Dalamud plugin config (contains Discord tokens & channel IDs — never commit)
+FFXIVDiscordBridgePlugin.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/

@@ -1,0 +1,28 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to FFXIV (Dalamud)",
+            "type": "coreclr",
+            "request": "attach",
+            "processName": "ffxiv_dx11",
+            "justMyCode": false,
+            "requireExactSource": false,
+            "symbolOptions": {
+                "searchMicrosoftSymbolServer": false,
+                "searchNuGetOrgSymbolServer": false
+            },
+            "suppressJITOptimizations": true
+        },
+        {
+            "name": "Build & Attach to FFXIV (Dalamud)",
+            "type": "coreclr",
+            "request": "attach",
+            "processName": "ffxiv_dx11",
+            "justMyCode": false,
+            "requireExactSource": false,
+            "suppressJITOptimizations": true,
+            "preLaunchTask": "build"
+        }
+    ]
+}
