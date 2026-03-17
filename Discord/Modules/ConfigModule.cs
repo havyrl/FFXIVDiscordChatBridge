@@ -78,6 +78,39 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
             await RespondAsync(T("config.channel.removed", ChatTypeHelper.GetFancyName(chatType), channel.Id), ephemeral: true);
         }
 
+        [SlashCommand("info", "Show the mapping for the current channel.")]
+        public async Task InfoAsync()
+        {
+            if (!guard.IsAdmin(Context.User.Id)) { await RespondAsync(T("common.admin_only"), ephemeral: true); return; }
+
+            var config  = configStore.Load();
+            var mapping = config.ChannelMappings.FirstOrDefault(m => m.DiscordChannelId == Context.Channel.Id);
+
+            if (mapping is null)
+            {
+                await RespondAsync(T("config.channel.info_not_configured"), ephemeral: true);
+                return;
+            }
+
+            var types = mapping.InboundChatTypes.Count > 0
+                ? $"`{string.Join(", ", mapping.InboundChatTypes.Select(ChatTypeHelper.GetSlug))}`"
+                : "*(none)*";
+            var back = mapping.BackChannelType.HasValue
+                ? $"`{ChatTypeHelper.GetSlug(mapping.BackChannelType.Value)}`"
+                : "*(none)*";
+            var webhook = string.IsNullOrEmpty(mapping.WebhookUrl) ? "*(none)*" : "✅ configured";
+
+            var embed = new EmbedBuilder()
+                .WithTitle(T("config.channel.info_title"))
+                .WithColor(0x478CFF)
+                .AddField(T("config.channel.info_inbound"),  types,   inline: false)
+                .AddField(T("config.channel.info_back"),     back,    inline: true)
+                .AddField(T("config.channel.info_webhook"),  webhook, inline: true)
+                .Build();
+
+            await RespondAsync(embed: embed, ephemeral: true);
+        }
+
         [SlashCommand("list", "List all current channel mappings.")]
         public async Task ListAsync()
         {
@@ -93,9 +126,11 @@ public sealed class ConfigModule(ILocalizer localizer, PermissionGuard guard, IC
             var lines = config.ChannelMappings.Select(m =>
             {
                 var target = m.IsDm ? "DM" : $"<#{m.DiscordChannelId}>";
-                var types  = string.Join(", ", m.InboundChatTypes.Select(ChatTypeHelper.GetSlug));
+                var types  = m.InboundChatTypes.Count > 0
+                    ? $"`{string.Join(", ", m.InboundChatTypes.Select(ChatTypeHelper.GetSlug))}`"
+                    : "*(none)*";
                 var back   = m.BackChannelType.HasValue ? $" | back→{ChatTypeHelper.GetSlug(m.BackChannelType.Value)}" : "";
-                return $"{target}: `{types}`{back}";
+                return $"{target}: {types}{back}";
             });
 
             var embed = new EmbedBuilder()
