@@ -70,6 +70,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         var webhookSender = _services.GetRequiredService<WebhookSender>();
         var botService    = _services.GetRequiredService<BotService>();
+        var chatGui       = _services.GetRequiredService<IChatGui>();
 
         // Wire all event sources → WebhookSender
         foreach (var source in _services.GetServices<IGameEventSource>())
@@ -83,6 +84,14 @@ public sealed class Plugin : IDalamudPlugin
 
         // Start the bot (fire-and-forget; logs errors internally)
         _ = botService.StartAsync();
+
+        // Print load notification to in-game chat
+        var asm       = typeof(Plugin).Assembly;
+        var version   = asm.GetName().Version is { } v ? $"v{v.Major}.{v.Minor}.{v.Build}" : "?";
+        var buildTime = System.Attribute.GetCustomAttributes(asm, typeof(System.Reflection.AssemblyMetadataAttribute))
+                              .Cast<System.Reflection.AssemblyMetadataAttribute>()
+                              .FirstOrDefault(a => a.Key == "BuildTime")?.Value ?? "?";
+        chatGui.Print($"[DiscordBridge] {version} geladen — Build: {buildTime}");
     }
 
     public void Dispose()
