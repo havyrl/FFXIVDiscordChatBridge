@@ -78,9 +78,70 @@ public static class ChatTypeHelper
             { (XivChatType)94,               new("gmnn",          "GM Novice Network") },
         };
 
+    /// <summary>
+    /// Chat types that originate from the game server / engine rather than a player character.
+    /// These should not be posted with the local character's name or avatar.
+    /// </summary>
+    private static readonly HashSet<XivChatType> SystemTypes =
+    [
+        XivChatType.SystemMessage,
+        XivChatType.SystemError,
+        XivChatType.GatheringSystemMessage,
+        XivChatType.ErrorMessage,
+        XivChatType.Notice,
+        XivChatType.Urgent,
+        XivChatType.Debug,
+        XivChatType.Echo,
+        (XivChatType)55,  // Alarm
+        (XivChatType)61,  // NPC Talk
+        (XivChatType)66,  // Synthesis Message
+        (XivChatType)68,  // NPC Announcement
+        (XivChatType)69,  // Free Company Announcement
+        (XivChatType)70,  // Free Company Login/Logout
+        (XivChatType)74,  // Random Number
+        (XivChatType)75,  // Novice Network Notifications
+    ];
+
+    public static bool IsSystemType(XivChatType type)
+        => SystemTypes.Contains((XivChatType)((int)type & 0x7F));
+
     public static string GetSlug(XivChatType type)
         => All.TryGetValue((XivChatType)((int)type & 0x7F), out var info) ? info.Slug : type.ToString();
 
     public static string GetFancyName(XivChatType type)
         => All.TryGetValue((XivChatType)((int)type & 0x7F), out var info) ? info.FancyName : type.ToString();
+
+    private static readonly IReadOnlyDictionary<XivChatType, string> GameCommands =
+        new Dictionary<XivChatType, string>
+        {
+            { XivChatType.Say,              "/say" },
+            { XivChatType.Yell,             "/yell" },
+            { XivChatType.Shout,            "/shout" },
+            { XivChatType.Party,            "/p" },
+            { XivChatType.FreeCompany,      "/fc" },
+            { XivChatType.NoviceNetwork,    "/novice" },
+            { XivChatType.Ls1,              "/ls1" },
+            { XivChatType.Ls2,              "/ls2" },
+            { XivChatType.Ls3,              "/ls3" },
+            { XivChatType.Ls4,              "/ls4" },
+            { XivChatType.Ls5,              "/ls5" },
+            { XivChatType.Ls6,              "/ls6" },
+            { XivChatType.Ls7,              "/ls7" },
+            { XivChatType.Ls8,              "/ls8" },
+            { XivChatType.CrossLinkShell1,  "/cwl1" },
+            { XivChatType.CrossLinkShell2,  "/cwl2" },
+            { XivChatType.CrossLinkShell3,  "/cwl3" },
+            { XivChatType.CrossLinkShell4,  "/cwl4" },
+            { XivChatType.CrossLinkShell5,  "/cwl5" },
+            { XivChatType.CrossLinkShell6,  "/cwl6" },
+            { XivChatType.CrossLinkShell7,  "/cwl7" },
+            { XivChatType.CrossLinkShell8,  "/cwl8" },
+        };
+
+    /// <summary>
+    /// Returns the in-game chat command prefix for a given chat type, or <c>null</c> if
+    /// the type cannot be sent as a player message (e.g. system types, tells without target).
+    /// </summary>
+    public static string? GetGameCommand(XivChatType type)
+        => GameCommands.TryGetValue(type, out var cmd) ? cmd : null;
 }
