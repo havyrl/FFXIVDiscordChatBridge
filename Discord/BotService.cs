@@ -155,7 +155,13 @@ public sealed class BotService : IDisposable
     private Task OnSlashCommandExecuted(SlashCommandInfo info, IInteractionContext ctx, IResult result)
     {
         if (!result.IsSuccess)
-            _log.Warning("[BotService] Slash command '{Name}' failed: {Error}", info.Name, result.ErrorReason);
+        {
+            var ex = result is ExecuteResult er ? er.Exception : null;
+            if (ex is not null)
+                _log.Error(ex, "[BotService] Slash command '{Name}' exception", info.Name);
+            else
+                _log.Warning("[BotService] Slash command '{Name}' failed: {Error}", info.Name, result.ErrorReason);
+        }
         return Task.CompletedTask;
     }
 
