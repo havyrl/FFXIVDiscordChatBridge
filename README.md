@@ -95,6 +95,10 @@ FFXIVDiscordBridgePlugin/
   Plugin.cs      — Dalamud entry point / DI root
 ```
 
+## Credits
+
+The idea for this plugin was sparked by the outdated [Dalamud.DiscordBridge](https://github.com/goatcorp/Dalamud.DiscordBridge).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
