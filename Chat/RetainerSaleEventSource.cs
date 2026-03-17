@@ -19,18 +19,18 @@ public sealed class RetainerSaleEventSource : IGameEventSource
     public event Func<DiscordMessagePayload, Task>? OnDiscordMessage;
 
     private readonly IChatGui _chatGui;
-    private readonly IClientState _clientState;
+    private readonly IPlayerState _playerState;
     private readonly IConfigStore _configStore;
     private readonly IPluginLog _log;
     private readonly SpecialCharsHandler _specialChars;
     private readonly IDataManager _dataManager;
 
-    public RetainerSaleEventSource(IChatGui chatGui, IClientState clientState,
+    public RetainerSaleEventSource(IChatGui chatGui, IPlayerState playerState,
                                    IConfigStore configStore, IPluginLog log,
                                    SpecialCharsHandler specialChars, IDataManager dataManager)
     {
         _chatGui = chatGui;
-        _clientState = clientState;
+        _playerState = playerState;
         _configStore = configStore;
         _log = log;
         _specialChars = specialChars;
@@ -52,7 +52,7 @@ public sealed class RetainerSaleEventSource : IGameEventSource
         if (targets.Count == 0) return;
 
         var messageText = _specialChars.Transform(message.TextValue);
-        var playerName  = _clientState.LocalPlayer?.Name.ToString() ?? "Retainer";
+        var playerName  = _playerState.IsLoaded ? _playerState.CharacterName : "Retainer";
 
         // Try to resolve item icon via ItemPayload → IDataManager lookup
         string? avatarUrl = null;
@@ -82,6 +82,7 @@ public sealed class RetainerSaleEventSource : IGameEventSource
             {
                 ChannelId  = mapping.DiscordChannelId,
                 WebhookUrl = mapping.WebhookUrl,
+                IsDm       = mapping.IsDm,
                 Username   = playerName,
                 Content    = messageText,
                 AvatarUrl  = avatarUrl,

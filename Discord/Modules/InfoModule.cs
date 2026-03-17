@@ -11,8 +11,8 @@ namespace FFXIVDiscordBridgePlugin.Discord.Modules;
 /// <summary>General bridge info commands: /help, /status, /who, /requestadmin</summary>
 [DefaultMemberPermissions(GuildPermission.SendMessages)]
 public sealed class InfoModule(ILocalizer localizer, PermissionGuard guard, IClientState clientState,
-                               BotService botService, AdminRequestService adminRequest, IConfigStore configStore,
-                               IFramework framework)
+                               IPlayerState playerState, BotService botService, AdminRequestService adminRequest,
+                               IConfigStore configStore, IFramework framework)
     : LocalizedModuleBase(localizer)
 {
     [SlashCommand("requestadmin", "Request admin access for the FFXIV Discord Bridge.")]
@@ -70,8 +70,8 @@ public sealed class InfoModule(ILocalizer localizer, PermissionGuard guard, ICli
         var (loggedIn, character) = await framework.RunOnFrameworkThread(() =>
         {
             var li = clientState.IsLoggedIn;
-            var ch = clientState.LocalPlayer is { } p
-                ? $"{p.Name}@{p.HomeWorld.ValueNullable?.Name ?? "?"}"
+            var ch = playerState.IsLoaded
+                ? $"{playerState.CharacterName}@{playerState.HomeWorld.ValueNullable?.Name ?? "?"}"
                 : T("info.status.no_character");
             return (li, ch);
         });
@@ -98,8 +98,8 @@ public sealed class InfoModule(ILocalizer localizer, PermissionGuard guard, ICli
 
         var playerInfo = await framework.RunOnFrameworkThread(() =>
         {
-            if (clientState.LocalPlayer is not { } p) return ((string, string)?)null;
-            return (p.Name.ToString(), p.HomeWorld.ValueNullable?.Name.ToString() ?? "?");
+            if (!playerState.IsLoaded) return ((string, string)?)null;
+            return (playerState.CharacterName, playerState.HomeWorld.ValueNullable?.Name.ToString() ?? "?");
         });
 
         if (playerInfo is null)

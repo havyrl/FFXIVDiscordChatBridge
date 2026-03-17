@@ -1,5 +1,6 @@
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
 using Discord;
 using FFXIVDiscordBridgePlugin.Config;
@@ -25,22 +26,27 @@ public sealed class ChatEventSource : IGameEventSource
     public event Func<DiscordMessagePayload, Task>? OnDiscordMessage;
 
     private readonly IChatGui _chatGui;
-    private readonly IClientState _clientState;
+    private readonly IPlayerState _playerState;
     private readonly IConfigStore _configStore;
     private readonly IPluginLog _log;
     private readonly SpecialCharsHandler _specialChars;
     private readonly CharacterAvatarService _avatarService;
+    private readonly ChatConfirmationService _confirmations;
+    private readonly LinkshellNameService _linkshellNames;
 
-    public ChatEventSource(IChatGui chatGui, IClientState clientState,
+    public ChatEventSource(IChatGui chatGui, IPlayerState playerState,
                            IConfigStore configStore, IPluginLog log,
-                           SpecialCharsHandler specialChars, CharacterAvatarService avatarService)
+                           SpecialCharsHandler specialChars, CharacterAvatarService avatarService,
+                           ChatConfirmationService confirmations, LinkshellNameService linkshellNames)
     {
         _chatGui = chatGui;
-        _clientState = clientState;
+        _playerState = playerState;
         _configStore = configStore;
         _log = log;
         _specialChars = specialChars;
         _avatarService = avatarService;
+        _confirmations = confirmations;
+        _linkshellNames = linkshellNames;
     }
 
     public void Initialize() => _chatGui.ChatMessage += OnChatMessage;
@@ -61,27 +67,64 @@ public sealed class ChatEventSource : IGameEventSource
 
         if (matchingMappings.Count == 0) return;
 
+        // Notify any pending slash-command confirmation that this message arrived
+        _confirmations.TryConfirm(normalizedType, message.TextValue);
+
         // Read all game-thread data before any await
         var senderName  = sender.TextValue;
         var messageText = message.TextValue;
-        var slug        = ChatTypeHelper.GetSlug(normalizedType);
+        var slug        = _linkshellNames.TryGetSlug(normalizedType) ?? ChatTypeHelper.GetSlug(normalizedType);
+        var isSystem    = ChatTypeHelper.IsSystemType(normalizedType);
 
-        var localPlayer = _clientState.LocalPlayer;
-        var webhookUsername = localPlayer is not null
-            ? $"{localPlayer.Name}@{localPlayer.HomeWorld.ValueNullable?.Name ?? "?"}"
-            : senderName;
+        var playerCharName = _playerState.IsLoaded ? _playerState.CharacterName : null;
+        var localWorld     = _playerState.IsLoaded ? _playerState.HomeWorld.ValueNullable?.Name.ToString() : null;
 
-        var charName = localPlayer?.Name.ToString();
-        var world    = localPlayer?.HomeWorld.ValueNullable?.Name.ToString();
+        // For cross-world players sender.TextValue concatenates name+world without separator
+        // (e.g. "R'yloh TiaOdin"). PlayerPayload carries them separately.
+        var playerPayload = sender.Payloads.OfType<PlayerPayload>().FirstOrDefault();
+        var payloadName   = playerPayload?.PlayerName;
+        var payloadWorld  = playerPayload?.World.ValueNullable?.Name.ToString();
+
+        // TellOutgoing: sender SeString contains the *recipient*, not the local player
+        var isTellOut = normalizedType == XivChatType.TellOutgoing;
+        var isOwnMessage = !isSystem && _playerState.IsLoaded && (
+            isTellOut ||
+            string.Equals(payloadName ?? senderName, playerCharName, StringComparison.OrdinalIgnoreCase));
+
+        if (!isSystem && !isOwnMessage && playerPayload is null)
+            _log.Warning("[ChatEventSource] No PlayerPayload in sender SeString — falling back to TextValue for '{Name}'", senderName);
+
+        var webhookUsername = isSystem
+            ? $"FFXIV System - {playerCharName}@{localWorld ?? "?"}".TrimEnd()
+            : isOwnMessage
+                ? $"{playerCharName}@{localWorld ?? "?"}"
+                : payloadName is not null
+                    ? $"{payloadName}@{payloadWorld ?? localWorld ?? "?"}"
+                    : $"{senderName}@{localWorld ?? "?"}";
+
+        // Strip rank icons / FFXIV private-use chars so Lodestone can find the character
+        var charName = isSystem ? null : (payloadName ?? ExtractCharacterName(senderName));
+        var world    = !isSystem ? (payloadWorld ?? localWorld) : null;
+
+        if (!isSystem && localWorld is null)
+            _log.Warning("[ChatEventSource] HomeWorld resolved to null — avatar will be skipped for {Name}", charName ?? "(null)");
 
         // Tell: track sender for autocomplete, optionally add Reply button
         MessageComponent? components = null;
         if (normalizedType == XivChatType.TellIncoming)
         {
-            TrackTellPartner(config, senderName);
+            // Build "Name@World" for the autocomplete cache.
+            // Cross-world: PlayerPayload has both name and world separated cleanly.
+            // Same-server: PlayerPayload may be absent; fall back to senderName + localWorld.
+            var tellSender = payloadName is not null
+                ? $"{payloadName}@{payloadWorld ?? localWorld ?? "?"}"
+                : localWorld is not null
+                    ? $"{senderName}@{localWorld}"
+                    : senderName;
+            TrackTellPartner(config, tellSender);
 
             var linkedUserId = config.CharLinks
-                .FirstOrDefault(l => l.FfxivCharacter.Equals(senderName, StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault(l => l.FfxivCharacter.Equals(tellSender, StringComparison.OrdinalIgnoreCase))
                 ?.DiscordUserId;
 
             if (linkedUserId.HasValue)
@@ -105,27 +148,45 @@ public sealed class ChatEventSource : IGameEventSource
                                          string? charName, string? world,
                                          MessageComponent? components)
     {
-        var content = $"[{slug}] {_specialChars.Transform(rawText)}";
-
-        string? avatarUrl = null;
-        if (charName is not null && world is not null)
-            avatarUrl = await _avatarService.GetAvatarUrlAsync(charName, world);
-
-        if (OnDiscordMessage is null) return;
-
-        foreach (var mapping in mappings)
+        _log.Debug("[ChatEventSource] FirePayloads start: mappings={Count} user={User} slug={Slug} text={Text}",
+                   mappings.Count, webhookUsername, slug, rawText);
+        try
         {
-            var payload = new DiscordMessagePayload
-            {
-                ChannelId  = mapping.DiscordChannelId,
-                WebhookUrl = mapping.WebhookUrl,
-                Username   = webhookUsername,
-                Content    = content,
-                AvatarUrl  = avatarUrl,
-                Components = components,
-            };
+            var content = $"[{slug}] {_specialChars.Transform(rawText)}";
 
-            await OnDiscordMessage.Invoke(payload);
+            string? avatarUrl;
+            if (charName is not null && world is not null)
+                avatarUrl = await _avatarService.GetAvatarUrlAsync(charName, world);
+            else
+                avatarUrl = CharacterAvatarService.FallbackAvatarUrl;
+
+            _log.Debug("[ChatEventSource] Avatar resolved: {AvatarUrl}", avatarUrl ?? "(null→fallback)");
+
+            if (OnDiscordMessage is null)
+            {
+                _log.Warning("[ChatEventSource] OnDiscordMessage is null — payload dropped for {User}", webhookUsername);
+                return;
+            }
+
+            foreach (var mapping in mappings)
+            {
+                var payload = new DiscordMessagePayload
+                {
+                    ChannelId  = mapping.DiscordChannelId,
+                    WebhookUrl = mapping.WebhookUrl,
+                    IsDm       = mapping.IsDm,
+                    Username   = webhookUsername,
+                    Content    = content,
+                    AvatarUrl  = avatarUrl,
+                    Components = components,
+                };
+
+                await OnDiscordMessage.Invoke(payload);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "[ChatEventSource] FirePayloadsAsync failed for user={User} text={Text}", webhookUsername, rawText);
         }
     }
 
@@ -140,8 +201,19 @@ public sealed class ChatEventSource : IGameEventSource
         if (config.RecentTellPartners.Count > 50)
             config.RecentTellPartners.RemoveAt(config.RecentTellPartners.Count - 1);
 
-        _configStore.Save(config);
+        _ = Task.Run(() => _configStore.Save(config));
     }
 
     public void Dispose() => _chatGui.ChatMessage -= OnChatMessage;
+
+    /// <summary>
+    /// Strips FFXIV rank icons and private-use characters from a sender name so it
+    /// can be used for Lodestone character lookups. FFXIV names only contain letters,
+    /// spaces, apostrophes, and hyphens.
+    /// </summary>
+    private static string? ExtractCharacterName(string senderName)
+    {
+        var clean = new string([..senderName.Where(c => char.IsLetter(c) || c == ' ' || c == '\'' || c == '-')]).Trim();
+        return clean.Length > 0 ? clean : null;
+    }
 }
