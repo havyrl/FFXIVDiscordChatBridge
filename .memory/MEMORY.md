@@ -89,6 +89,12 @@ BinaryFromLogGenerator/   ← Hilfstool: generiert Test-Binärdaten aus FFXIV-Lo
 
 ---
 
+## Regeln
+
+- **Kein Co-Authored-By in Commits.** Niemals `Co-Authored-By: Claude ...` in Commit-Messages einfügen.
+
+---
+
 ## Letzte Aktualisierung
 
 2026-03-17 — LS/CWLS-Namen-Feature implementiert, API-Erkenntnisse notiert.
