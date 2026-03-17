@@ -9,23 +9,26 @@ namespace FFXIVDiscordBridgePlugin.Gui;
 /// </summary>
 public sealed class PluginGui : IDisposable
 {
-    private readonly WindowSystem    _windowSystem = new("FFXIVDiscordBridgePlugin");
-    private readonly MainWindow      _mainWindow;
-    private readonly ICommandManager _commandManager;
+    private readonly WindowSystem          _windowSystem = new("FFXIVDiscordBridgePlugin");
+    private readonly MainWindow            _mainWindow;
+    private readonly ICommandManager       _commandManager;
+    private readonly IDalamudPluginInterface _pluginInterface;
 
     private const string Command = "/discordbridge";
 
     public PluginGui(MainWindow mainWindow, AdminRequestWindow adminRequestWindow,
                      ICommandManager commandManager, IDalamudPluginInterface pluginInterface)
     {
-        _mainWindow     = mainWindow;
-        _commandManager = commandManager;
+        _mainWindow      = mainWindow;
+        _commandManager  = commandManager;
+        _pluginInterface = pluginInterface;
 
         _windowSystem.AddWindow(_mainWindow);
         _windowSystem.AddWindow(adminRequestWindow);
 
         pluginInterface.UiBuilder.Draw         += _windowSystem.Draw;
         pluginInterface.UiBuilder.OpenConfigUi += OpenMainWindow;
+        pluginInterface.UiBuilder.OpenMainUi   += OpenMainWindow;
 
         _commandManager.AddHandler(Command, new Dalamud.Game.Command.CommandInfo(OnCommand)
         {
@@ -43,6 +46,9 @@ public sealed class PluginGui : IDisposable
 
     public void Dispose()
     {
+        _pluginInterface.UiBuilder.Draw         -= _windowSystem.Draw;
+        _pluginInterface.UiBuilder.OpenConfigUi -= OpenMainWindow;
+        _pluginInterface.UiBuilder.OpenMainUi   -= OpenMainWindow;
         _commandManager.RemoveHandler(Command);
         _windowSystem.RemoveAllWindows();
     }
