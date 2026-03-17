@@ -1,6 +1,8 @@
 # FFXIV Discord Bridge
 
-A [Dalamud](https://github.com/goatcorp/Dalamud) plugin for Final Fantasy XIV that bridges in-game chat with Discord — bidirectionally.
+**FFXIV Discord Bridge** is a [Dalamud](https://github.com/goatcorp/Dalamud) plugin that connects your Final Fantasy XIV in-game chat with a Discord server — in both directions.
+
+Chat messages from FFXIV are automatically forwarded to Discord channels of your choice. From Discord, whitelisted users can reply directly back into the game. No extra software or accounts needed beyond a Discord bot token.
 
 ## Features
 
@@ -21,9 +23,15 @@ A [Dalamud](https://github.com/goatcorp/Dalamud) plugin for Final Fantasy XIV th
 
 ## Installation
 
-1. Add this repository to XIVLauncher's custom plugin repositories (Settings → Experimental → Custom Plugin Repositories).
-2. Install **FFXIV Discord Bridge** from the plugin list.
-3. Open the plugin settings via `/discordbridge` or the Dalamud plugin menu.
+> **Note:** This plugin is not in the official Dalamud plugin list. You need to add it as a custom repository.
+
+1. Open XIVLauncher settings → **Experimental** → **Custom Plugin Repositories**.
+2. Add the following URL and click **Save**:
+   ```
+   https://raw.githubusercontent.com/havyrl/FFXIVDiscordChatBridge/main/repo.json
+   ```
+3. Open the Dalamud Plugin Installer, search for **FFXIV Discord Bridge** and install it.
+4. Open plugin settings via `/discordbridge` or the Dalamud plugin menu and enter your bot token to get started.
 
 ## Configuration
 

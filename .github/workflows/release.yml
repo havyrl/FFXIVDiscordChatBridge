@@ -7,10 +7,9 @@ on:
         description: "Version (e.g. 1.0.0)"
         required: true
 
-  # Automatically trigger on version tags — uncomment when ready:
-  # push:
-  #   tags:
-  #     - 'v*'
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   release:
@@ -36,6 +35,14 @@ jobs:
             echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Update plugin manifest version
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $json = Get-Content FFXIVDiscordBridgePlugin.json -Raw | ConvertFrom-Json
+          $json.TestingAssemblyVersion = "$v.0"
+          $json | ConvertTo-Json -Depth 10 | Set-Content FFXIVDiscordBridgePlugin.json
+
       - name: Download Dalamud
         shell: pwsh
         run: |
@@ -58,14 +65,14 @@ jobs:
           $json[0].AssemblyVersion = "$v.0.0"
           $json | ConvertTo-Json -Depth 10 | Set-Content repo.json
 
-      - name: Commit updated repo.json
+      - name: Commit updated manifests
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add repo.json
-          git commit -m "chore: bump repo.json to ${{ steps.ver.outputs.version }}"
-          git push
+          git add repo.json FFXIVDiscordBridgePlugin.json
+          git commit -m "chore: bump manifests to ${{ steps.ver.outputs.version }}"
+          git push origin HEAD:main
 
       - name: Package
         shell: pwsh
