@@ -30,13 +30,15 @@ public sealed class ChatEventSource : IGameEventSource
     private readonly IConfigStore _configStore;
     private readonly IPluginLog _log;
     private readonly MessageConverter _messageConverter;
+    private readonly MapImageService _mapImageService;
     private readonly CharacterAvatarService _avatarService;
     private readonly ChatConfirmationService _confirmations;
     private readonly LinkshellNameService _linkshellNames;
 
     public ChatEventSource(IChatGui chatGui, IPlayerState playerState,
                            IConfigStore configStore, IPluginLog log,
-                           MessageConverter messageConverter, CharacterAvatarService avatarService,
+                           MessageConverter messageConverter, MapImageService mapImageService,
+                           CharacterAvatarService avatarService,
                            ChatConfirmationService confirmations, LinkshellNameService linkshellNames)
     {
         _chatGui = chatGui;
@@ -44,6 +46,7 @@ public sealed class ChatEventSource : IGameEventSource
         _configStore = configStore;
         _log = log;
         _messageConverter = messageConverter;
+        _mapImageService = mapImageService;
         _avatarService = avatarService;
         _confirmations = confirmations;
         _linkshellNames = linkshellNames;
@@ -76,6 +79,7 @@ public sealed class ChatEventSource : IGameEventSource
         var senderName  = sender.TextValue;
         var messageText = _messageConverter.ToDiscord(message);
         var slug        = _linkshellNames.TryGetSlug(normalizedType) ?? ChatTypeHelper.GetSlug(normalizedType);
+        var mapLink     = message.Payloads.OfType<MapLinkPayload>().FirstOrDefault();
         var isSystem    = ChatTypeHelper.IsSystemType(normalizedType);
 
         var playerCharName = _playerState.IsLoaded ? _playerState.CharacterName : null;
@@ -140,7 +144,7 @@ public sealed class ChatEventSource : IGameEventSource
 
         // Hand off to async continuation — all game data already captured above
         _ = FirePayloadsAsync(matchingMappings, webhookUsername, slug, messageText,
-                              charName, world, components);
+                              charName, world, components, mapLink);
     }
 
     // ── Async dispatch ─────────────────────────────────────────────────────
@@ -148,7 +152,8 @@ public sealed class ChatEventSource : IGameEventSource
     private async Task FirePayloadsAsync(List<ChannelMapping> mappings, string webhookUsername,
                                          string slug, string rawText,
                                          string? charName, string? world,
-                                         MessageComponent? components)
+                                         MessageComponent? components,
+                                         MapLinkPayload? mapLink = null)
     {
         _log.Debug("[ChatEventSource] FirePayloads start: mappings={Count} user={User} slug={Slug} text={Text}",
                    mappings.Count, webhookUsername, slug, rawText);
@@ -162,6 +167,12 @@ public sealed class ChatEventSource : IGameEventSource
             else
                 avatarUrl = CharacterAvatarService.FallbackAvatarUrl;
 
+            // GeneratePinImage is CPU-heavy (texture decode + image processing).
+            // Run off the game thread, after the first await above has already yielded.
+            var mapImage = mapLink is not null
+                ? await Task.Run(() => _mapImageService.GeneratePinImage(mapLink))
+                : null;
+
             _log.Debug("[ChatEventSource] Avatar resolved: {AvatarUrl}", avatarUrl ?? "(null→fallback)");
 
             if (OnDiscordMessage is null)
@@ -174,13 +185,15 @@ public sealed class ChatEventSource : IGameEventSource
             {
                 var payload = new DiscordMessagePayload
                 {
-                    ChannelId  = mapping.DiscordChannelId,
-                    WebhookUrl = mapping.WebhookUrl,
-                    IsDm       = mapping.IsDm,
-                    Username   = webhookUsername,
-                    Content    = content,
-                    AvatarUrl  = avatarUrl,
-                    Components = components,
+                    ChannelId          = mapping.DiscordChannelId,
+                    WebhookUrl         = mapping.WebhookUrl,
+                    IsDm               = mapping.IsDm,
+                    Username           = webhookUsername,
+                    Content            = content,
+                    AvatarUrl          = avatarUrl,
+                    Components         = components,
+                    Attachment         = mapImage,
+                    AttachmentFilename = mapImage is not null ? "map.jpg" : null,
                 };
 
                 await OnDiscordMessage.Invoke(payload);

@@ -97,12 +97,28 @@ public sealed class WebhookSender : IDisposable
         var client = _clientCache.GetOrAdd(payload.WebhookUrl,
             url => new DiscordWebhookClient(url));
 
-        var messageId = await client.SendMessageAsync(
-            text: payload.Content,
-            username: payload.Username,
-            avatarUrl: payload.AvatarUrl,
-            embeds: payload.Embeds,
-            components: payload.Components);
+        ulong messageId;
+        if (payload.Attachment is { Length: > 0 } bytes)
+        {
+            using var stream = new MemoryStream(bytes);
+            messageId = await client.SendFileAsync(
+                stream:    stream,
+                filename:  payload.AttachmentFilename ?? "attachment.jpg",
+                text:      payload.Content,
+                username:  payload.Username,
+                avatarUrl: payload.AvatarUrl,
+                embeds:    payload.Embeds,
+                components: payload.Components);
+        }
+        else
+        {
+            messageId = await client.SendMessageAsync(
+                text:      payload.Content,
+                username:  payload.Username,
+                avatarUrl: payload.AvatarUrl,
+                embeds:    payload.Embeds,
+                components: payload.Components);
+        }
 
         if (payload.ComponentTimeout.HasValue)
             _ = RemoveWebhookComponentsAfterAsync(client, messageId, payload.ComponentTimeout.Value);

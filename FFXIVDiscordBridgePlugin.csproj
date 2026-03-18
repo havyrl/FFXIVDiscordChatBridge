@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <NoWarn>CA1416</NoWarn>
+    <NoWarn>CA1416;NU1902</NoWarn>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
   </PropertyGroup>
 
@@ -34,6 +34,9 @@
     <PackageReference Include="Discord.Net.WebSocket" Version="3.18.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
     <PackageReference Include="NetStone" Version="1.3.1" />
+    <!-- NU1902 suppressed: CVE only affects untrusted image input; we only process game textures -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.8" NoWarn="NU1902" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.4" NoWarn="NU1902" />
   </ItemGroup>
 
 </Project>

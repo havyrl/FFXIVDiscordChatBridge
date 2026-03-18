@@ -40,4 +40,10 @@ public sealed class DiscordMessagePayload
     /// ChannelId and WebhookUrl are ignored for DM payloads.
     /// </summary>
     public bool IsDm { get; init; }
+
+    /// <summary>Optional file attachment (e.g. a generated map image). Sent alongside the message content.</summary>
+    public byte[]? Attachment { get; init; }
+
+    /// <summary>Filename shown in Discord for <see cref="Attachment"/> (e.g. "map.jpg").</summary>
+    public string? AttachmentFilename { get; init; }
 }
