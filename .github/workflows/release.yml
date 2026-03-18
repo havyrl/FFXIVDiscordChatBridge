@@ -46,8 +46,12 @@ jobs:
           echo "assembly_version=$(echo $VERSION | cut -d'-' -f1).0" >> $GITHUB_OUTPUT
 
       - name: Install git-cliff
-        shell: bash
-        run: choco install git-cliff -y --no-progress
+        shell: pwsh
+        run: |
+          $url = "https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-x86_64-pc-windows-msvc.zip"
+          Invoke-WebRequest -Uri $url -OutFile git-cliff.zip
+          Expand-Archive -Force git-cliff.zip git-cliff-bin
+          echo "$PWD\git-cliff-bin" >> $env:GITHUB_PATH
 
       - name: Generate changelog (full history)
         shell: bash
