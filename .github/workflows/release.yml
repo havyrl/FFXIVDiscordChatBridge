@@ -124,13 +124,13 @@ jobs:
           git push origin HEAD:main
 
       - name: Create GitHub Release
-        shell: bash
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mv bin/x64/Release/FFXIVDiscordBridgePlugin/latest.zip FFXIVDiscordBridgePlugin.zip
-          gh release create "v${{ needs.changelog.outputs.version }}" \
-            --title "v${{ needs.changelog.outputs.version }}" \
-            --notes-file CHANGES.md \
-            --target main \
-            FFXIVDiscordBridgePlugin.zip
+          $zip = Get-ChildItem -Recurse -Filter "latest.zip" | Select-Object -First 1
+          if (-not $zip) { Write-Error "latest.zip not found"; exit 1 }
+          Write-Host "Found zip at: $($zip.FullName)"
+          Copy-Item $zip.FullName FFXIVDiscordBridgePlugin.zip
+          $v = "${{ needs.changelog.outputs.version }}"
+          gh release create "v$v" --title "v$v" --notes-file CHANGES.md --target main FFXIVDiscordBridgePlugin.zip
