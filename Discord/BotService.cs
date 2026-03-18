@@ -157,6 +157,17 @@ public sealed class BotService : IDisposable
 
         // Auto-create/resolve webhooks for all channel mappings that have none yet
         await _webhookResolver.ResolveAllAsync(_client);
+
+        // Warn if DeleteBackChannelMessages is enabled but bot lacks Manage Messages
+        foreach (var mapping in _configStore.Load().ChannelMappings.Where(m => m.DeleteBackChannelMessages && !m.IsDm))
+        {
+            if (_client!.GetChannel(mapping.DiscordChannelId) is not SocketGuildChannel ch) continue;
+            var botUser = ch.Guild.GetUser(_client.CurrentUser.Id);
+            if (botUser?.GetPermissions(ch).ManageMessages != true)
+                _log.Warning("[BotService] DeleteBackChannelMessages is enabled for channel {ChannelId} " +
+                             "but the bot is missing 'Manage Messages' permission — messages will NOT be deleted.",
+                             mapping.DiscordChannelId);
+        }
     }
 
     private async Task OnInteraction(SocketInteraction interaction)
@@ -214,6 +225,9 @@ public sealed class BotService : IDisposable
                 _chatSender.Execute($"{gameCmd} {text}");
                 if (localMsg is not null) _chatGui.Print(localMsg);
             });
+
+            if (mapping.DeleteBackChannelMessages)
+                await message.DeleteAsync();
         }
         catch (Exception ex)
         {
