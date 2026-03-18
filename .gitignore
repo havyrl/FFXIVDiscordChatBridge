@@ -2,23 +2,11 @@
 bin/
 obj/
 
-# Visual Studio
-.vs/
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-*.rsuser
-
-# VS Code (keep shared config, ignore personal overrides)
-.vscode/*
-!.vscode/extensions.json
-!.vscode/launch.json
-!.vscode/tasks.json
-!.vscode/settings.json
-
-# Rider
-.idea/
+# Dot-directories — all ignored except .github, .memory, .vscode
+.*/
+!.github/
+!.memory/
+!.vscode/
 
 # NuGet — keep lock file, ignore downloaded packages
 packages/

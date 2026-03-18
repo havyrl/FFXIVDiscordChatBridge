@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+
+  <!-- Background -->
+  <rect fill="#23272A" height="512" rx="72" width="512"/>
+
+  <!-- Discord Symbol: scale 1.5, top at y=77 → center y=149, bottom y=221 -->
+  <g transform="translate(43, 77) scale(1.5)">
+    <path d="m81.15,0c-1.24,2.2 -2.35,4.47 -3.36,6.79c-9.6,-1.44 -19.37,-1.44 -28.99,0c-0.99,-2.32 -2.13,-4.59 -3.36,-6.79c-9.02,1.54 -17.81,4.24 -26.14,8.06c-16.52,24.47 -20.99,48.31 -18.77,71.83c9.67,7.14 20.51,12.6 32.05,16.08c2.6,-3.48 4.9,-7.19 6.87,-11.06c-3.74,-1.39 -7.35,-3.13 -10.81,-5.15c0.91,-0.66 1.79,-1.34 2.65,-2c20.28,9.55 43.77,9.55 64.08,0c0.86,0.71 1.74,1.39 2.65,2c-3.46,2.05 -7.07,3.76 -10.83,5.18c1.97,3.86 4.26,7.57 6.87,11.06c11.54,-3.49 22.37,-8.92 32.05,-16.06c2.62,-27.28 -4.5,-50.92 -18.82,-71.86c-8.31,-3.81 -17.1,-6.51 -26.11,-8.03l-0.03,-0.05zm-38.87,65.41c-6.24,0 -11.42,-5.65 -11.42,-12.65s4.98,-12.68 11.4,-12.68s11.51,5.71 11.41,12.68c-0.1,6.97 -5.03,12.65 -11.39,12.65zm42.08,0c-6.27,0 -11.39,-5.65 -11.39,-12.65s4.97,-12.68 11.39,-12.68s11.49,5.71 11.39,12.68c-0.1,6.97 -5.03,12.65 -11.39,12.65z"
+          fill="#5865F2"/>
+  </g>
+
+  <!-- XIV: font-size 144, right-aligned, right margin = 43px -->
+  <text fill="#C0A75A" font-family="Georgia, 'Times New Roman', serif" font-size="144" font-weight="bold"
+        letter-spacing="-3" text-anchor="end" x="469" y="439">XIV</text>
+
+  <!-- Arrows: translate(-5,-8) + rotate 45° clockwise around (255,278) -->
+  <g transform="translate(-5, -8) rotate(45, 255, 278)">
+    <!-- Right arrow (top, y=254) -->
+    <line stroke="#FFFFFF" stroke-linecap="round" stroke-width="14" x1="232" x2="278" y1="254" y2="254"/>
+    <polyline fill="#23272A" points="262,236 280,254 262,272" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="14"/>
+    <!-- Left arrow (bottom, y=302) -->
+    <line stroke="#FFFFFF" stroke-linecap="round" stroke-width="14" x1="232" x2="278" y1="302" y2="302"/>
+    <polyline fill="#23272A" points="248,284 230,302 248,320" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="14"/>
+  </g>
+
+</svg>
