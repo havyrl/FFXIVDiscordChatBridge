@@ -97,7 +97,7 @@ FFXIVDiscordBridgePlugin/
 
 ## Credits
 
-The idea for this plugin was sparked by the outdated [Dalamud.DiscordBridge](https://github.com/goatcorp/Dalamud.DiscordBridge).
+The idea for this plugin was sparked by the outdated [Dalamud.DiscordBridge](https://github.com/reiichi001/Dalamud.DiscordBridge).
 
 ## License
 
