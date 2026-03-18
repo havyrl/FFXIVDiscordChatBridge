@@ -51,6 +51,18 @@ public sealed class PluginConfig : IPluginConfiguration
 
     /// <summary>Locale segment used in database URLs (en / de / fr / ja).</summary>
     public string ItemLinkLocale { get; set; } = "de";
+
+    /// <summary>How map links from FFXIV chat are forwarded to Discord.</summary>
+    public MapLinkStyle MapStyle { get; set; } = MapLinkStyle.TextWithLink;
+}
+
+public enum MapLinkStyle
+{
+    /// <summary>Send the map link as formatted text with a Teamcraft URL.</summary>
+    TextWithLink,
+
+    /// <summary>Send a generated map image with a pin marker as attachment.</summary>
+    ImageWithPin,
 }
 
 // ── Channel Mapping ────────────────────────────────────────────────────────

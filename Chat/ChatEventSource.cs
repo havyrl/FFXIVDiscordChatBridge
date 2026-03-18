@@ -169,7 +169,7 @@ public sealed class ChatEventSource : IGameEventSource
 
             // GeneratePinImage is CPU-heavy (texture decode + image processing).
             // Run off the game thread, after the first await above has already yielded.
-            var mapImage = mapLink is not null
+            var mapImage = mapLink is not null && _configStore.Load().MapStyle == MapLinkStyle.ImageWithPin
                 ? await Task.Run(() => _mapImageService.GeneratePinImage(mapLink))
                 : null;
 

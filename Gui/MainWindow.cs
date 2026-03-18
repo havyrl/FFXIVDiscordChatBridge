@@ -42,10 +42,13 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService, 
     private string _linkCharacter   = string.Empty;
 
     // Formatting tab
-    private static readonly string[] LocaleOptions = ["de", "en", "fr", "ja"];
+    private static readonly string[] LocaleOptions    = ["de", "en", "fr", "ja"];
+    private static readonly string[] MapStyleLabels   = ["Text + Link", "Image with Pin"];
+    private static readonly MapLinkStyle[] MapStyleValues = [MapLinkStyle.TextWithLink, MapLinkStyle.ImageWithPin];
     private int    _fmtDbIdx;
     private int    _fmtLocaleIdx;
-    private string _fmtCustomUrl = string.Empty;
+    private string _fmtCustomUrl   = string.Empty;
+    private int    _fmtMapStyleIdx;
 
     public override void OnOpen()
     {
@@ -73,7 +76,9 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService, 
             _fmtDbIdx = ItemDatabaseDefinition.Builtin.Count; // Custom slot
         _fmtLocaleIdx = Array.IndexOf(LocaleOptions, _config.ItemLinkLocale);
         if (_fmtLocaleIdx < 0) _fmtLocaleIdx = 0;
-        _fmtCustomUrl = _config.CustomItemUrlTemplate;
+        _fmtCustomUrl   = _config.CustomItemUrlTemplate;
+        _fmtMapStyleIdx = Array.IndexOf(MapStyleValues, _config.MapStyle);
+        if (_fmtMapStyleIdx < 0) _fmtMapStyleIdx = 0;
     }
 
     public override void Draw()
@@ -385,11 +390,20 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService, 
         ImGui.Combo("Locale##fmtloc", ref _fmtLocaleIdx, LocaleOptions, LocaleOptions.Length);
 
         ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+        ImGui.Text("Map Link Style");
+        ImGui.TextDisabled("How map links from FFXIV chat are forwarded to Discord.");
+        ImGui.SetNextItemWidth(160);
+        ImGui.Combo("Style##fmtmap", ref _fmtMapStyleIdx, MapStyleLabels, MapStyleLabels.Length);
+
+        ImGui.Spacing();
         if (ImGui.Button("Save##fmtsave"))
         {
             _config.ItemDatabaseId        = isCustom ? "custom" : builtin[_fmtDbIdx].Id;
             _config.ItemLinkLocale        = LocaleOptions[_fmtLocaleIdx];
             _config.CustomItemUrlTemplate = _fmtCustomUrl;
+            _config.MapStyle              = MapStyleValues[_fmtMapStyleIdx];
             configStore.Save(_config);
         }
     }

@@ -76,8 +76,6 @@ FFXIVDiscordBridgePlugin/
 | [project_pandorasbox_feature_ideas.md](project_pandorasbox_feature_ideas.md) | Feature-Ideen aus PandorasBox-Analyse: IPC-API, Post-Duty-Summary, Map-Link-Formatting, FATE-Notifications |
 | [project_linkshell_api.md](project_linkshell_api.md) | FFXIVClientStructs LS/CWLS-Namen API (Typen, Methoden, deutsche Präfixe kk/wkk) |
 | [project_backchannel.md](project_backchannel.md) | Discord→FFXIV: zwei Einstiegspunkte (BotService.OnMessageReceived + ChatModule), beide via GameChatSender |
-| [plan_item_links.md](plan_item_links.md) | Implementierungsplan Item-Links: zentraler MessageConverter, Stufe 1 Teamcraft-URL (FFXIV→Discord), Stufe 2 URL→Itemname (Discord→FFXIV) |
-| [plan_map_links.md](plan_map_links.md) | Implementierungsplan Map-Links: Stufe 1 Text+URL im MessageConverter, Stufe 2 Kartenbild+Pin via MapImageService + WebhookSender-Erweiterung |
 | [reference_branding.md](reference_branding.md) | Branding-Ressourcen: Discord & FFXIV Fankit URLs, Plugin-Icon Dateien & SVG→PNG Konvertierung |
 
 ---
