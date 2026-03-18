@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using Dalamud.Game;
 using Dalamud.Plugin.Services;
+using Discord;
 using Discord.Interactions;
 
 namespace FFXIVDiscordBridgePlugin.Util;
@@ -96,6 +97,28 @@ public abstract class LocalizedModuleBase(ILocalizer localizer)
     {
         if (isAdmin(Context.User.Id)) return true;
         await RespondAsync(T("common.admin_only"), ephemeral: true);
+        return false;
+    }
+
+    /// <summary>
+    /// Responds with "guild only" and returns false when used outside a guild channel.
+    /// Usage: <c>if (!await RequireGuildContextAsync()) return;</c>
+    /// </summary>
+    protected async Task<bool> RequireGuildContextAsync()
+    {
+        if (Context.Channel is IGuildChannel) return true;
+        await RespondAsync(T("common.guild_only"), ephemeral: true);
+        return false;
+    }
+
+    /// <summary>
+    /// Responds with "DM only" and returns false when used outside a DM.
+    /// Usage: <c>if (!await RequireDmContextAsync()) return;</c>
+    /// </summary>
+    protected async Task<bool> RequireDmContextAsync()
+    {
+        if (Context.Channel is IDMChannel) return true;
+        await RespondAsync(T("common.dm_only"), ephemeral: true);
         return false;
     }
 }

@@ -38,23 +38,41 @@ public sealed class InfoModule(ILocalizer localizer, PermissionGuard guard, ICli
             return;
         }
 
-        var embed = new EmbedBuilder()
+        var locale  = Context.Interaction.UserLocale;
+        var builder = new EmbedBuilder()
             .WithTitle(T("info.help.title"))
-            .WithColor(0x478CFF)
-            .AddField("/help",   T("info.help.help"))
-            .AddField("/status", T("info.help.status"))
-            .AddField("/who",    T("info.help.who"))
-            .AddField("/say, /fc, /party, /yell, /shout", T("info.help.chat"))
-            .AddField("/tell <character> <message>",      T("info.help.tell"))
-            .AddField("/config channel",      T("info.help.config_channel"))
-            .AddField("/config backchannel",  T("info.help.config_backchannel"))
-            .AddField("/config webhook",      T("info.help.config_webhook"))
-            .AddField("/config dm",           T("info.help.config_dm"))
-            .AddField("/config permissions",  T("info.help.config_permissions"))
-            .AddField("/config link",         T("info.help.config_link"))
-            .Build();
+            .WithColor(0x478CFF);
 
-        await RespondAsync(embed: embed, ephemeral: true);
+        if (botService.Interactions is { } interactions)
+        {
+            var topLevel = interactions.Modules
+                .Where(m => m.Parent == null)
+                .OrderBy(m => m.SlashGroupName ?? m.SlashCommands.FirstOrDefault()?.Name ?? m.Name);
+
+            foreach (var mod in topLevel)
+            {
+                if (mod.IsSlashGroup)
+                {
+                    var groupName = mod.SlashGroupName;
+                    var key       = $"slash.{groupName}";
+                    var desc      = Localizer.T(key, locale);
+                    if (desc == key) desc = mod.Description ?? groupName;
+                    builder.AddField($"/{groupName}", desc);
+                }
+                else
+                {
+                    foreach (var cmd in mod.SlashCommands.OrderBy(c => c.Name))
+                    {
+                        var key  = $"slash.{cmd.Name}";
+                        var desc = Localizer.T(key, locale);
+                        if (desc == key) desc = cmd.Description;
+                        builder.AddField($"/{cmd.Name}", desc);
+                    }
+                }
+            }
+        }
+
+        await RespondAsync(embed: builder.Build(), ephemeral: true);
     }
 
     [SlashCommand("status", "Shows bridge connection status and active channel mappings.")]
@@ -82,6 +100,48 @@ public sealed class InfoModule(ILocalizer localizer, PermissionGuard guard, ICli
             .AddField(T("info.status.bot_label"),       connected ? T("info.status.connected")    : T("info.status.disconnected"), inline: true)
             .AddField(T("info.status.ffxiv_label"),     loggedIn  ? T("info.status.logged_in")    : T("info.status.not_logged_in"), inline: true)
             .AddField(T("info.status.character_label"), character, inline: true)
+            .Build();
+
+        await RespondAsync(embed: embed, ephemeral: true);
+    }
+
+    [SlashCommand("chattypes", "List all supported FFXIV chat type slugs with their names.")]
+    public async Task ChatTypesAsync()
+    {
+        if (!guard.CanViewStatus(Context.User))
+        {
+            await RespondAsync(T("common.no_permission"), ephemeral: true);
+            return;
+        }
+
+        var locale = Context.Interaction.UserLocale;
+
+        // System/GM slugs are separated into their own field to keep the main list readable.
+        var systemSlugs = new HashSet<string>
+        {
+            "none", "debug", "urgent", "notice", "e", "sysmsg", "syserror", "gathersysmsg",
+            "errmsg", "alarm", "npctalk", "synthmsg", "npcannounce", "fcannounce", "fclogin",
+            "sign", "random", "nnn",
+            "gmtell", "gmsay", "gmshout", "gmyell", "gmp", "gmfc",
+            "gmls1", "gmls2", "gmls3", "gmls4", "gmls5", "gmls6", "gmls7", "gmls8", "gmnn",
+        };
+
+        string FormatEntry(KeyValuePair<Dalamud.Game.Text.XivChatType, ChatTypeHelper.ChatTypeInfo> kvp)
+            => $"`{kvp.Value.Slug}` — {ChatTypeHelper.GetLocalizedName(kvp.Key, Localizer, locale)}";
+
+        var common = string.Join("\n", ChatTypeHelper.All
+            .Where(kvp => !systemSlugs.Contains(kvp.Value.Slug))
+            .Select(FormatEntry));
+
+        var system = string.Join("\n", ChatTypeHelper.All
+            .Where(kvp => systemSlugs.Contains(kvp.Value.Slug))
+            .Select(FormatEntry));
+
+        var embed = new EmbedBuilder()
+            .WithTitle(T("info.chattypes.title"))
+            .WithColor(0x478CFF)
+            .AddField(T("info.chattypes.common"), common)
+            .AddField(T("info.chattypes.system"), system)
             .Build();
 
         await RespondAsync(embed: embed, ephemeral: true);

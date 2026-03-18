@@ -169,7 +169,7 @@ public sealed class ChatModule(ILocalizer localizer, PermissionGuard guard, Game
         mapping.BackChannelType = chatType;
         configStore.Save(config);
 
-        await RespondAsync(T("chat.backchannel_set", ChatTypeHelper.GetFancyName(chatType)), ephemeral: true);
+        await RespondAsync(T("chat.backchannel_set", ChatTypeHelper.GetLocalizedName(chatType, Localizer, Context.Interaction.UserLocale)), ephemeral: true);
     }
 
     private async Task DeleteWhenConfirmedAsync(Task<bool> confirmed)

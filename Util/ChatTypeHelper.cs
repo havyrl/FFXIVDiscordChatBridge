@@ -111,6 +111,17 @@ public static class ChatTypeHelper
     public static string GetFancyName(XivChatType type)
         => All.TryGetValue((XivChatType)((int)type & 0x7F), out var info) ? info.FancyName : type.ToString();
 
+    /// <summary>
+    /// Returns the localized display name for <paramref name="type"/> using the given Discord locale.
+    /// Falls back to <see cref="GetFancyName"/> if no locale key is found.
+    /// </summary>
+    public static string GetLocalizedName(XivChatType type, ILocalizer localizer, string? discordLocale = null)
+    {
+        var key = $"chattype.{GetSlug(type)}";
+        var result = localizer.T(key, discordLocale);
+        return result != key ? result : GetFancyName(type);
+    }
+
     private static readonly IReadOnlyDictionary<XivChatType, string> GameCommands =
         new Dictionary<XivChatType, string>
         {

@@ -1,12 +1,14 @@
 using Discord;
 using Discord.Interactions;
 using FFXIVDiscordBridgePlugin.Util;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FFXIVDiscordBridgePlugin.Discord.Modules;
 
 /// <summary>
 /// Provides autocomplete suggestions for FFXIV chat type slugs.
-/// Matches on slug prefix or fancy-name substring (case-insensitive), max 25 results.
+/// Matches on slug prefix or localized-name substring (case-insensitive), max 25 results.
+/// Display names are localized using the Discord user's locale.
 /// </summary>
 public sealed class ChatTypeAutocompleteHandler : AutocompleteHandler
 {
@@ -16,15 +18,22 @@ public sealed class ChatTypeAutocompleteHandler : AutocompleteHandler
         IParameterInfo parameter,
         IServiceProvider services)
     {
-        var current = autocompleteInteraction.Data.Current.Value?.ToString() ?? "";
+        var localizer = services.GetRequiredService<ILocalizer>();
+        var locale    = autocompleteInteraction.UserLocale;
+        var current   = autocompleteInteraction.Data.Current.Value?.ToString() ?? "";
 
-        var results = ChatTypeHelper.All.Values
-            .Where(info =>
+        var results = ChatTypeHelper.All
+            .Select(kvp => new
+            {
+                kvp.Value.Slug,
+                Name = ChatTypeHelper.GetLocalizedName(kvp.Key, localizer, locale),
+            })
+            .Where(x =>
                 current.Length == 0
-                || info.Slug.StartsWith(current, StringComparison.OrdinalIgnoreCase)
-                || info.FancyName.Contains(current, StringComparison.OrdinalIgnoreCase))
+                || x.Slug.StartsWith(current, StringComparison.OrdinalIgnoreCase)
+                || x.Name.Contains(current, StringComparison.OrdinalIgnoreCase))
             .Take(25)
-            .Select(info => new AutocompleteResult(info.FancyName, info.Slug));
+            .Select(x => new AutocompleteResult(x.Name, x.Slug));
 
         return Task.FromResult(AutocompletionResult.FromSuccess(results));
     }
