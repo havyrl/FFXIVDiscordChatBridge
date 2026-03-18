@@ -45,25 +45,23 @@ jobs:
           # AssemblyVersion must be purely numeric — strip prerelease suffix (0.1.0-beta → 0.1.0)
           echo "assembly_version=$(echo $VERSION | cut -d'-' -f1).0" >> $GITHUB_OUTPUT
 
+      - name: Install git-cliff
+        shell: bash
+        run: choco install git-cliff -y --no-progress
+
       - name: Generate changelog (full history)
-        uses: orhun/git-cliff-action@v3
-        with:
-          config: cliff.toml
-          args: --output CHANGELOG.md
+        shell: bash
         env:
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ github.token }}
+        run: git cliff --config cliff.toml --output CHANGELOG.md
 
       - name: Generate changelog (latest release)
-        uses: orhun/git-cliff-action@v3
-        id: cliff
-        with:
-          config: cliff.toml
-          args: --latest --strip header
+        shell: bash
         env:
-          OUTPUT: CHANGES.md
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ github.token }}
+        run: git cliff --config cliff.toml --latest --strip header --output CHANGES.md
 
       - name: Update plugin manifest version
         shell: pwsh
