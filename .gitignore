@@ -17,6 +17,9 @@ packages/
 Thumbs.db
 desktop.ini
 
+# Claude
+CLAUDE.md
+
 # Logs
 *.log
 logs/
