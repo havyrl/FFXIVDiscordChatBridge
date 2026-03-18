@@ -83,9 +83,10 @@ FFXIVDiscordBridgePlugin/
 ## Regeln
 
 - **Kein Co-Authored-By in Commits.** Niemals `Co-Authored-By: Claude ...` in Commit-Messages einfügen.
+- **`gh` CLI — korrekter Account:** Vor jedem `gh`-Aufruf mit `gh auth status` prüfen welcher Account aktiv ist. Bei Bedarf mit `gh auth switch` auf den richtigen Account wechseln (Repo-Owner: havyrl).
 
 ---
 
 ## Letzte Aktualisierung
 
-2026-03-17 — Memory bereinigt, MEMORY.md auf aktuellen Projektstand (Dalamud-Plugin) aktualisiert.
+2026-03-18 — gh-Account-Regel ergänzt.
