@@ -111,7 +111,7 @@ jobs:
           $v = "${{ needs.changelog.outputs.version }}"
           $changelog = Get-Content "CHANGES.md" -Raw -ErrorAction SilentlyContinue
           $json = Get-Content repo.json -Raw | ConvertFrom-Json
-          $json[0].AssemblyVersion = "$v.0.0"
+          $json[0].AssemblyVersion = "${{ needs.changelog.outputs.assembly_version }}"
           $json[0].LastUpdate = [int][double]::Parse((Get-Date -UFormat %s))
           if ($changelog) { $json[0].Changelog = $changelog.Trim() }
           ConvertTo-Json -InputObject $json -Depth 10 | Set-Content repo.json

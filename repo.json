@@ -17,7 +17,7 @@
   ],
   "AcceptsFeedback": false,
   "DalamudApiLevel": 14,
-  "AssemblyVersion": "0.2.0-beta.20260318.0.0",
+  "AssemblyVersion": "0.2.0.0",
   "DownloadLinkInstall": "https://github.com/havyrl/FFXIVDiscordChatBridge/releases/latest/download/FFXIVDiscordBridgePlugin.zip",
   "DownloadLinkUpdate": "https://github.com/havyrl/FFXIVDiscordChatBridge/releases/latest/download/FFXIVDiscordBridgePlugin.zip",
   "DownloadLinkTesting": "https://github.com/havyrl/FFXIVDiscordChatBridge/releases/latest/download/FFXIVDiscordBridgePlugin.zip",
