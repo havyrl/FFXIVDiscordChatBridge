@@ -1,29 +1,27 @@
-[
-  {
-    "Author": "Havyrl",
-    "Name": "FFXIV Discord Bridge",
-    "Punchline": "Bridges FFXIV chat with Discord via webhooks and slash commands.",
-    "Description": "Forwards FFXIV chat channels to Discord via webhooks and allows sending messages back from Discord using slash commands.\n\nBugs & suggestions: https://github.com/havyrl/FFXIVDiscordChatBridge/issues",
-    "InternalName": "FFXIVDiscordBridgePlugin",
-    "RepoUrl": "https://github.com/havyrl/FFXIVDiscordChatBridge",
-    "ApplicableVersion": "any",
-    "Tags": [
-      "chat",
-      "discord",
-      "bridge"
-    ],
-    "CategoryTags": [
-      "Tools",
-      "Soziales"
-    ],
-    "AcceptsFeedback": false,
-    "DalamudApiLevel": 14,
-    "AssemblyVersion": "0.1.0.0",
-    "DownloadLinkInstall": "https://github.com/havyrl/FFXIVDiscordChatBridge/releases/latest/download/FFXIVDiscordBridgePlugin.zip",
-    "DownloadLinkUpdate": "https://github.com/havyrl/FFXIVDiscordChatBridge/releases/latest/download/FFXIVDiscordBridgePlugin.zip",
-    "DownloadLinkTesting": "https://github.com/havyrl/FFXIVDiscordChatBridge/releases/latest/download/FFXIVDiscordBridgePlugin.zip",
-    "LastUpdate": 0,
-    "IconUrl": "https://raw.githubusercontent.com/havyrl/FFXIVDiscordChatBridge/main/images/icon.png",
-    "Changelog": "Initial release"
-  }
-]
+{
+  "Author": "Havyrl",
+  "Name": "FFXIV Discord Bridge",
+  "Punchline": "Bridges FFXIV chat with Discord via webhooks and slash commands.",
+  "Description": "Forwards FFXIV chat channels to Discord via webhooks and allows sending messages back from Discord using slash commands.\n\nBugs & suggestions: https://github.com/havyrl/FFXIVDiscordChatBridge/issues",
+  "InternalName": "FFXIVDiscordBridgePlugin",
+  "RepoUrl": "https://github.com/havyrl/FFXIVDiscordChatBridge",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "chat",
+    "discord",
+    "bridge"
+  ],
+  "CategoryTags": [
+    "Tools",
+    "Soziales"
+  ],
+  "AcceptsFeedback": false,
+  "DalamudApiLevel": 14,
+  "AssemblyVersion": "0.2.0-beta.20260318.0.0",
+  "DownloadLinkInstall": "https://github.com/havyrl/FFXIVDiscordChatBridge/releases/latest/download/FFXIVDiscordBridgePlugin.zip",
+  "DownloadLinkUpdate": "https://github.com/havyrl/FFXIVDiscordChatBridge/releases/latest/download/FFXIVDiscordBridgePlugin.zip",
+  "DownloadLinkTesting": "https://github.com/havyrl/FFXIVDiscordChatBridge/releases/latest/download/FFXIVDiscordBridgePlugin.zip",
+  "LastUpdate": 1773867152,
+  "IconUrl": "https://raw.githubusercontent.com/havyrl/FFXIVDiscordChatBridge/main/images/icon.png",
+  "Changelog": "### Bug Fixes\r\n- Wrap repo.json in array (Dalamud custom repo format)\r\n\r\n### Features\r\n- Item links and map links forwarding via MessageConverter\r\n- Delete original Discord message after back-channel forwarding\r\n- Generate map pin image and attach to Discord message\r\n- Localize chat type names and add /chattypes command\r\n- Add MapLinkStyle config toggle (TextWithLink / ImageWithPin)"
+}
