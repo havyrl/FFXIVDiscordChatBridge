@@ -35,6 +35,7 @@ public sealed class BotService : IDisposable
 
     public bool IsConnected => _client?.ConnectionState == ConnectionState.Connected;
     public DiscordSocketClient? Client => _client;
+    public InteractionService? Interactions => _interactions;
 
     /// <summary>All guilds (servers) the bot is currently a member of. Empty when disconnected.</summary>
     public IReadOnlyList<(ulong Id, string Name)> AvailableGuilds
@@ -138,6 +139,8 @@ public sealed class BotService : IDisposable
         var primaryGuildId = _configStore.Load().PrimaryGuildId;
         if (primaryGuildId != 0)
         {
+            // Clear any leftover global commands so they don't show up alongside guild commands.
+            await _client!.Rest.DeleteAllGlobalCommandsAsync();
             await _interactions.RegisterCommandsToGuildAsync(primaryGuildId);
             _log.Information("[BotService] Slash commands registered to guild {GuildId} ({Count} modules).",
                              primaryGuildId, _interactions.Modules.Count);
