@@ -26,6 +26,8 @@ public sealed class BotService : IDisposable
     private readonly PermissionGuard _permissionGuard;
     private readonly GameChatSender _chatSender;
     private readonly IFramework _framework;
+    private readonly MessageConverter _messageConverter;
+    private readonly IChatGui _chatGui;
 
     private DiscordSocketClient? _client;
     private InteractionService? _interactions;
@@ -43,7 +45,8 @@ public sealed class BotService : IDisposable
                       IServiceProvider services, IEnumerable<IDiscordActionHandler> actionHandlers,
                       IClientState clientState, SpecialCharsHandler specialChars,
                       WebhookResolver webhookResolver, PermissionGuard permissionGuard,
-                      GameChatSender chatSender, IFramework framework)
+                      GameChatSender chatSender, IFramework framework,
+                      MessageConverter messageConverter, IChatGui chatGui)
     {
         _log = log;
         _configStore = configStore;
@@ -55,6 +58,8 @@ public sealed class BotService : IDisposable
         _permissionGuard = permissionGuard;
         _chatSender = chatSender;
         _framework = framework;
+        _messageConverter = messageConverter;
+        _chatGui = chatGui;
 
         clientState.Login  += OnPlayerLogin;
         clientState.Logout += OnPlayerLogout;
@@ -197,12 +202,18 @@ public sealed class BotService : IDisposable
         var gameCmd = ChatTypeHelper.GetGameCommand(mapping.BackChannelType!.Value);
         if (gameCmd is null) return;
 
-        var text = message.Content;
+        var text     = _messageConverter.ToGameText(message.Content);
         if (string.IsNullOrWhiteSpace(text)) return;
+
+        var localMsg = _messageConverter.BuildLocalMessage(message.Content);
 
         try
         {
-            await _framework.RunOnFrameworkThread(() => _chatSender.Execute($"{gameCmd} {text}"));
+            await _framework.RunOnFrameworkThread(() =>
+            {
+                _chatSender.Execute($"{gameCmd} {text}");
+                if (localMsg is not null) _chatGui.Print(localMsg);
+            });
         }
         catch (Exception ex)
         {

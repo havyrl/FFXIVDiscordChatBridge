@@ -29,21 +29,21 @@ public sealed class ChatEventSource : IGameEventSource
     private readonly IPlayerState _playerState;
     private readonly IConfigStore _configStore;
     private readonly IPluginLog _log;
-    private readonly SpecialCharsHandler _specialChars;
+    private readonly MessageConverter _messageConverter;
     private readonly CharacterAvatarService _avatarService;
     private readonly ChatConfirmationService _confirmations;
     private readonly LinkshellNameService _linkshellNames;
 
     public ChatEventSource(IChatGui chatGui, IPlayerState playerState,
                            IConfigStore configStore, IPluginLog log,
-                           SpecialCharsHandler specialChars, CharacterAvatarService avatarService,
+                           MessageConverter messageConverter, CharacterAvatarService avatarService,
                            ChatConfirmationService confirmations, LinkshellNameService linkshellNames)
     {
         _chatGui = chatGui;
         _playerState = playerState;
         _configStore = configStore;
         _log = log;
-        _specialChars = specialChars;
+        _messageConverter = messageConverter;
         _avatarService = avatarService;
         _confirmations = confirmations;
         _linkshellNames = linkshellNames;
@@ -70,9 +70,11 @@ public sealed class ChatEventSource : IGameEventSource
         // Notify any pending slash-command confirmation that this message arrived
         _confirmations.TryConfirm(normalizedType, message.TextValue);
 
-        // Read all game-thread data before any await
+        // Read all game-thread data before any await.
+        // ToDiscord() is synchronous and must run here on the game thread
+        // while the SeString payloads are still valid.
         var senderName  = sender.TextValue;
-        var messageText = message.TextValue;
+        var messageText = _messageConverter.ToDiscord(message);
         var slug        = _linkshellNames.TryGetSlug(normalizedType) ?? ChatTypeHelper.GetSlug(normalizedType);
         var isSystem    = ChatTypeHelper.IsSystemType(normalizedType);
 
@@ -152,7 +154,7 @@ public sealed class ChatEventSource : IGameEventSource
                    mappings.Count, webhookUsername, slug, rawText);
         try
         {
-            var content = $"[{slug}] {_specialChars.Transform(rawText)}";
+            var content = $"[{slug}] {rawText}";
 
             string? avatarUrl;
             if (charName is not null && world is not null)

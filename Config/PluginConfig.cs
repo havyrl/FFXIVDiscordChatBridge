@@ -41,6 +41,16 @@ public sealed class PluginConfig : IPluginConfiguration
     // ── Tell tracker ──────────────────────────────────────────────────────
     /// <summary>Recently seen tell partners for /tell autocomplete (CharacterName@World).</summary>
     public List<string> RecentTellPartners { get; set; } = [];
+
+    // ── Message formatting ────────────────────────────────────────────────
+    /// <summary>ID of the active item database (matches ItemDatabaseDefinition.Id).</summary>
+    public string ItemDatabaseId { get; set; } = "teamcraft";
+
+    /// <summary>URL template for the custom item database. Use {id} as placeholder.</summary>
+    public string CustomItemUrlTemplate { get; set; } = string.Empty;
+
+    /// <summary>Locale segment used in database URLs (en / de / fr / ja).</summary>
+    public string ItemLinkLocale { get; set; } = "de";
 }
 
 // ── Channel Mapping ────────────────────────────────────────────────────────
@@ -77,6 +87,12 @@ public sealed class ChannelMapping
 
     /// <summary>When true, this channel receives Retainer Sale notifications (with item icon).</summary>
     public bool IsRetainerSale { get; set; }
+
+    /// <summary>
+    /// When true, the original Discord message is deleted after being forwarded to FFXIV via the back-channel.
+    /// Requires the bot to have the "Manage Messages" permission in this channel.
+    /// </summary>
+    public bool DeleteBackChannelMessages { get; set; }
 }
 
 // ── Character ↔ Discord Link ───────────────────────────────────────────────

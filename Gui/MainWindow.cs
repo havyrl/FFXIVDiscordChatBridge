@@ -41,6 +41,12 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService, 
     private string _linkDiscordId   = string.Empty;
     private string _linkCharacter   = string.Empty;
 
+    // Formatting tab
+    private static readonly string[] LocaleOptions = ["de", "en", "fr", "ja"];
+    private int    _fmtDbIdx;
+    private int    _fmtLocaleIdx;
+    private string _fmtCustomUrl = string.Empty;
+
     public override void OnOpen()
     {
         _config      = configStore.Load();
@@ -58,6 +64,16 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService, 
                 if (guilds[i].Id == _config.PrimaryGuildId) { _primaryGuildIdx = i + 1; break; }
             }
         }
+
+        _fmtDbIdx = ItemDatabaseDefinition.Builtin
+            .Select((d, i) => (d, i))
+            .FirstOrDefault(x => x.d.Id == _config.ItemDatabaseId).i;
+        // If not found (e.g. custom), select last entry which will show Custom controls
+        if (_fmtDbIdx == 0 && _config.ItemDatabaseId != ItemDatabaseDefinition.Builtin[0].Id)
+            _fmtDbIdx = ItemDatabaseDefinition.Builtin.Count; // Custom slot
+        _fmtLocaleIdx = Array.IndexOf(LocaleOptions, _config.ItemLinkLocale);
+        if (_fmtLocaleIdx < 0) _fmtLocaleIdx = 0;
+        _fmtCustomUrl = _config.CustomItemUrlTemplate;
     }
 
     public override void Draw()
@@ -66,10 +82,11 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService, 
 
         if (!ImGui.BeginTabBar("##tabs")) return;
 
-        if (ImGui.BeginTabItem("Bot Settings"))  { DrawBotTab();      ImGui.EndTabItem(); }
-        if (ImGui.BeginTabItem("Channels"))       { DrawChannelsTab(); ImGui.EndTabItem(); }
-        if (ImGui.BeginTabItem("Whitelist"))      { DrawWhitelistTab(); ImGui.EndTabItem(); }
-        if (ImGui.BeginTabItem("Character Links")){ DrawCharLinksTab(); ImGui.EndTabItem(); }
+        if (ImGui.BeginTabItem("Bot Settings"))  { DrawBotTab();        ImGui.EndTabItem(); }
+        if (ImGui.BeginTabItem("Channels"))       { DrawChannelsTab();   ImGui.EndTabItem(); }
+        if (ImGui.BeginTabItem("Whitelist"))      { DrawWhitelistTab();  ImGui.EndTabItem(); }
+        if (ImGui.BeginTabItem("Character Links")){ DrawCharLinksTab();  ImGui.EndTabItem(); }
+        if (ImGui.BeginTabItem("Formatting"))     { DrawFormattingTab(); ImGui.EndTabItem(); }
 
         ImGui.EndTabBar();
     }
@@ -153,6 +170,20 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService, 
 
             ImGui.BulletText($"{label}  [{types}]{back}");
             ImGui.SameLine();
+            if (mapping.BackChannelType.HasValue && !mapping.IsDm)
+            {
+                var delMsg = mapping.DeleteBackChannelMessages;
+                ImGui.PushID($"delbck{mapping.DiscordChannelId}");
+                if (ImGui.Checkbox("Auto-delete", ref delMsg))
+                {
+                    mapping.DeleteBackChannelMessages = delMsg;
+                    configStore.Save(_config);
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("Originalnachricht in Discord l\u00f6schen, nachdem sie ins Spiel weitergeleitet wurde.\nErfordert 'Nachrichten verwalten'-Berechtigung f\u00fcr den Bot.");
+                ImGui.PopID();
+                ImGui.SameLine();
+            }
             if (!shiftHeld) ImGui.BeginDisabled();
             ImGui.PushID($"rm{mapping.DiscordChannelId}");
             if (ImGuiComponents.IconButton(FontAwesomeIcon.TrashAlt))
@@ -322,6 +353,44 @@ public sealed class MainWindow(IConfigStore configStore, BotService botService, 
             _config.CharLinks.Add(new CharLink { DiscordUserId = clId, FfxivCharacter = _linkCharacter });
             configStore.Save(_config);
             _linkDiscordId = _linkCharacter = string.Empty;
+        }
+    }
+
+    // ── Formatting ─────────────────────────────────────────────────────────
+
+    private void DrawFormattingTab()
+    {
+        ImGui.Text("Item Link Database");
+        ImGui.TextDisabled("Where item links from FFXIV chat are sent (FFXIV \u2192 Discord).");
+        ImGui.Spacing();
+
+        var builtin    = ItemDatabaseDefinition.Builtin;
+        var dbNames    = builtin.Select(d => d.DisplayName).Append("Custom").ToArray();
+        var isCustom   = _fmtDbIdx >= builtin.Count;
+
+        ImGui.SetNextItemWidth(160);
+        ImGui.Combo("Database##fmtdb", ref _fmtDbIdx, dbNames, dbNames.Length);
+
+        if (isCustom)
+        {
+            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+            ImGui.InputText("URL Template##fmturl", ref _fmtCustomUrl, 256);
+            ImGui.TextDisabled("Placeholders: {id} = item ID, {locale} = locale string.");
+        }
+
+        ImGui.Spacing();
+        ImGui.Text("Link Locale");
+        ImGui.TextDisabled("Language used in database URLs (de, en, fr, ja).");
+        ImGui.SetNextItemWidth(80);
+        ImGui.Combo("Locale##fmtloc", ref _fmtLocaleIdx, LocaleOptions, LocaleOptions.Length);
+
+        ImGui.Spacing();
+        if (ImGui.Button("Save##fmtsave"))
+        {
+            _config.ItemDatabaseId        = isCustom ? "custom" : builtin[_fmtDbIdx].Id;
+            _config.ItemLinkLocale        = LocaleOptions[_fmtLocaleIdx];
+            _config.CustomItemUrlTemplate = _fmtCustomUrl;
+            configStore.Save(_config);
         }
     }
 

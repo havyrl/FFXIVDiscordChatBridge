@@ -1,4 +1,5 @@
 using Dalamud.Game.Text;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Discord;
 using Discord.Interactions;
@@ -20,7 +21,7 @@ namespace FFXIVDiscordBridgePlugin.Discord.Modules;
 /// </summary>
 public sealed class ChatModule(ILocalizer localizer, PermissionGuard guard, GameChatSender chatSender,
                                ChatConfirmationService confirmations, IFramework framework,
-                               IConfigStore configStore)
+                               IConfigStore configStore, MessageConverter messageConverter, IChatGui chatGui)
     : LocalizedModuleBase(localizer)
 {
     [SlashCommand("say", "Send a /say message in FFXIV, or set this channel as Say back-channel.")]
@@ -46,6 +47,14 @@ public sealed class ChatModule(ILocalizer localizer, PermissionGuard guard, Game
     [SlashCommand("nn", "Send a /novice message in FFXIV (Novice Network), or set this channel as NN back-channel.")]
     public async Task NnAsync([Summary("message", "Message text")] string? message = null)
         => await DispatchAsync(XivChatType.NoviceNetwork, message);
+
+    [SlashCommand("echo", "Send an /echo message in FFXIV (visible only to yourself).")]
+    public async Task EchoAsync([Summary("message", "Message text")] string message)
+    {
+        var converted = messageConverter.ToGameText(message);
+        var localMsg  = messageConverter.BuildLocalMessage(message);
+        await SendChatAsync($"/e {converted}", XivChatType.Echo, converted, requireChat: true, localMsg);
+    }
 
     private static readonly XivChatType[] LsTypes =
     [
@@ -95,7 +104,9 @@ public sealed class ChatModule(ILocalizer localizer, PermissionGuard guard, Game
             await RespondAsync(T("chat.no_permission_tell"), ephemeral: true);
             return;
         }
-        await SendChatAsync($"/tell {character} {message}", XivChatType.TellOutgoing, message);
+        var converted = messageConverter.ToGameText(message);
+        var localMsg  = messageConverter.BuildLocalMessage(message);
+        await SendChatAsync($"/tell {character} {converted}", XivChatType.TellOutgoing, converted, localMessage: localMsg);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
@@ -103,12 +114,14 @@ public sealed class ChatModule(ILocalizer localizer, PermissionGuard guard, Game
     private Task DispatchAsync(XivChatType chatType, string? message)
     {
         if (message is null) return SetBackChannelAsync(chatType);
-        var gameCmd = ChatTypeHelper.GetGameCommand(chatType)!;
-        return SendChatAsync($"{gameCmd} {message}", chatType, message, requireChat: true);
+        var gameCmd   = ChatTypeHelper.GetGameCommand(chatType)!;
+        var converted = messageConverter.ToGameText(message);
+        var localMsg  = messageConverter.BuildLocalMessage(message);
+        return SendChatAsync($"{gameCmd} {converted}", chatType, converted, requireChat: true, localMsg);
     }
 
     private async Task SendChatAsync(string command, XivChatType expectedType, string expectedText,
-                                     bool requireChat = false)
+                                     bool requireChat = false, SeString? localMessage = null)
     {
         if (requireChat && !guard.CanUseChatCommands(Context.User))
         {
@@ -119,7 +132,11 @@ public sealed class ChatModule(ILocalizer localizer, PermissionGuard guard, Game
         // Register the confirmation BEFORE sending so we don't miss a fast response
         var confirmed = confirmations.WaitAsync(expectedType, expectedText, TimeSpan.FromSeconds(15));
 
-        await framework.RunOnFrameworkThread(() => chatSender.Execute(command));
+        await framework.RunOnFrameworkThread(() =>
+        {
+            chatSender.Execute(command);
+            if (localMessage is not null) chatGui.Print(localMessage);
+        });
 
         await RespondAsync(T("chat.sent"), ephemeral: true);
 

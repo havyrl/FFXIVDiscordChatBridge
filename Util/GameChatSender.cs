@@ -12,6 +12,10 @@ public sealed class GameChatSender(IPluginLog log)
 {
     public unsafe void Execute(string command)
     {
+        // FFXIV cannot render characters outside the BMP (codepoints > U+FFFF),
+        // which includes most emoji — including those Discord auto-converts from emoticons like ":-)".
+        // Strip all UTF-16 surrogate pairs before passing the text to the game.
+        command = StripSurrogatePairs(command);
         var uiModule = UIModule.Instance();
         if (uiModule == null)
         {
@@ -35,5 +39,22 @@ public sealed class GameChatSender(IPluginLog log)
             shell->ExecuteCommandInner(&str, uiModule);
             str.Dtor();
         }
+    }
+
+    private static string StripSurrogatePairs(string input)
+    {
+        if (!input.Any(char.IsHighSurrogate)) return input;
+
+        var sb = new System.Text.StringBuilder(input.Length);
+        for (var i = 0; i < input.Length; i++)
+        {
+            if (char.IsHighSurrogate(input[i]))
+            {
+                i++; // skip the paired low surrogate
+                continue;
+            }
+            sb.Append(input[i]);
+        }
+        return sb.ToString();
     }
 }

@@ -151,6 +151,8 @@
   "slash.wkk": "Sendet eine WKK-Nachricht in FFXIV oder setzt diesen Kanal als WKK-R\u00fcckkanal.",
   "slash.wkk.number": "Weltübergreifende Kontaktkreis-Nummer (1\u20138)",
   "slash.wkk.message": "Nachrichtentext",
+  "slash.echo": "Sendet eine /echo-Nachricht in FFXIV (nur für dich selbst sichtbar).",
+  "slash.echo.message": "Nachrichtentext",
   "slash.tell": "Sendet eine Direktnachricht an einen FFXIV-Spieler.",
   "slash.tell.character": "Charaktername (Vorname Nachname@Welt)",
   "slash.tell.message": "Nachrichtentext",

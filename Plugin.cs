@@ -42,6 +42,7 @@ public sealed class Plugin : IDalamudPlugin
         // ── Utility services ──────────────────────────────────────────────
         collection.AddSingleton<ILocalizer, Localizer>();
         collection.AddSingleton<SpecialCharsHandler>();
+        collection.AddSingleton<MessageConverter>();
         collection.AddSingleton<CharacterAvatarService>();
         collection.AddSingleton<GameChatSender>();
         collection.AddSingleton<ChatConfirmationService>();
