@@ -1,0 +1,50 @@
+name: Changelog
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to create (e.g. 0.2.0-beta.20260318)"
+        required: true
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          token: ${{ github.token }}
+          fetch-depth: 0
+
+      - name: Generate changelog (full history)
+        uses: orhun/git-cliff-action@v3
+        with:
+          config: cliff.toml
+          args: --output CHANGELOG.md
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Generate changelog (latest release)
+        uses: orhun/git-cliff-action@v3
+        with:
+          config: cliff.toml
+          args: --latest --strip header --output CHANGES.md
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Commit and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md CHANGES.md
+          git diff --cached --quiet || git commit -m "docs: update changelog for v${{ github.event.inputs.version }}"
+          git push origin HEAD:main
+          git tag "v${{ github.event.inputs.version }}"
+          git push origin "v${{ github.event.inputs.version }}"

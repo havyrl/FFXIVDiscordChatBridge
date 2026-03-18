@@ -45,27 +45,6 @@ jobs:
           # AssemblyVersion must be purely numeric — strip prerelease suffix (0.1.0-beta → 0.1.0)
           echo "assembly_version=$(echo $VERSION | cut -d'-' -f1).0" >> $GITHUB_OUTPUT
 
-      - name: Install git-cliff
-        shell: pwsh
-        run: |
-          $url = "https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-x86_64-pc-windows-msvc.zip"
-          Invoke-WebRequest -Uri $url -OutFile git-cliff.zip
-          Expand-Archive -Force git-cliff.zip git-cliff-bin
-          echo "$PWD\git-cliff-bin" >> $env:GITHUB_PATH
-
-      - name: Generate changelog (full history)
-        shell: bash
-        env:
-          GITHUB_REPO: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: git cliff --config cliff.toml --output CHANGELOG.md
-
-      - name: Generate changelog (latest release)
-        shell: bash
-        env:
-          GITHUB_REPO: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: git cliff --config cliff.toml --latest --strip header --output CHANGES.md
 
       - name: Update plugin manifest version
         shell: pwsh
