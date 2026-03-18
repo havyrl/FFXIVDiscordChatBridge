@@ -1,4 +1,4 @@
-{
+[{
   "Author": "Havyrl",
   "Name": "FFXIV Discord Bridge",
   "Punchline": "Bridges FFXIV chat with Discord via webhooks and slash commands.",
@@ -24,4 +24,4 @@
   "LastUpdate": 1773867309,
   "IconUrl": "https://raw.githubusercontent.com/havyrl/FFXIVDiscordChatBridge/main/images/icon.png",
   "Changelog": "### Bug Fixes\r\n- Wrap repo.json in array (Dalamud custom repo format)\r\n\r\n### Features\r\n- Item links and map links forwarding via MessageConverter\r\n- Delete original Discord message after back-channel forwarding\r\n- Generate map pin image and attach to Discord message\r\n- Localize chat type names and add /chattypes command\r\n- Add MapLinkStyle config toggle (TextWithLink / ImageWithPin)"
-}
+}]
