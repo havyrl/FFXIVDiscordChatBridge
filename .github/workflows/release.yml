@@ -135,4 +135,6 @@ jobs:
           Write-Host "Found zip at: $($zip.FullName)"
           Copy-Item $zip.FullName FFXIVDiscordBridgePlugin.zip
           $v = "${{ needs.changelog.outputs.version }}"
-          gh release create "v$v" --title "v$v" --notes-file CHANGES.md --target main FFXIVDiscordBridgePlugin.zip
+          $args = @("release", "create", "v$v", "--title", "v$v", "--target", "main", "FFXIVDiscordBridgePlugin.zip")
+          if (Test-Path "CHANGES.md") { $args += @("--notes-file", "CHANGES.md") } else { $args += @("--notes", "") }
+          & gh @args
